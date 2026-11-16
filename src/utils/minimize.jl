@@ -6,8 +6,18 @@
 """
     brent(f, a, b; rtol = sqrt(eps()), atol = 1e-12, maxiter = 100)
 
-Local minimum `(x, f(x))` of `f` on `[a, b]` by Brent's method (golden-section search with
-parabolic interpolation, no derivative).
+Local minimum of `f` on `[a, b]` by Brent's method (golden-section search with parabolic
+interpolation, no derivative).
+
+**Inputs**
+- `f` - `Function`: function of one real variable
+- `a`, `b` - `Real`: bounds of the search interval
+- `rtol`, `atol` - `Real`: relative and absolute tolerances on the minimizer
+- `maxiter` - `Integer`: maximum number of iterations
+
+**Outputs**
+- `x` - `Real`: minimizer
+- `fx` - `Real`: minimum `f(x)`
 """
 function brent(f, a, b; rtol = sqrt(eps()), atol = 1e-12, maxiter = 100)
     a, b = minmax(float(a), float(b))
@@ -21,7 +31,7 @@ function brent(f, a, b; rtol = sqrt(eps()), atol = 1e-12, maxiter = 100)
         tol2 = 2tol1
         abs(x - m) <= tol2 - (b - a) / 2 && break
         golden = true
-        if abs(e) > tol1                                  # try a parabolic step
+        if abs(e) > tol1  # try a parabolic step
             r = (x - w) * (fx - fv)
             q = (x - v) * (fx - fw)
             p = (x - v) * q - (x - w) * r
@@ -34,7 +44,7 @@ function brent(f, a, b; rtol = sqrt(eps()), atol = 1e-12, maxiter = 100)
                 golden = false
             end
         end
-        if golden                                         # golden-section step
+        if golden  # golden-section step
             e = (x < m ? b : a) - x
             d = c * e
         end
@@ -58,9 +68,16 @@ end
 """
     grid_minimize(f, grid)
 
-Global minimum of `f` over `grid` (sorted), refined by [`brent`](@ref) between the
-neighbours of the best grid point. The refined point is kept only if it improves on the
-grid. `NaN` values are treated as `+Inf`.
+Global minimum of `f` over a grid, refined by [`brent`](@ref) between the neighbours of the
+best grid point. The refined point is kept only if it improves on the grid. `NaN` values are
+treated as `+Inf`.
+
+**Inputs**
+- `f` - `Function`: function of one real variable
+- `grid` - `AbstractVector{<:Real}`: sorted search grid
+
+**Outputs**
+- `x` - `Real`: minimizer
 """
 function grid_minimize(f, grid)
     g(x) = (v = f(x); isnan(v) ? Inf : v)

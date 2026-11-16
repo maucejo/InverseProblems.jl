@@ -10,10 +10,32 @@ abstract type SmoothingOperator end
 """All groups use the identity: `L U = U`."""
 struct IdentitySmoothing <: SmoothingOperator end
 
-"""General smoothing operator (sparse, `nout × nr`)."""
-struct MatrixSmoothing{M<:AbstractMatrix} <: SmoothingOperator
+"""
+General smoothing operator (sparse, `nout × nr`), with its LU factorization when it is
+square and invertible (`F = nothing` otherwise).
+"""
+struct MatrixSmoothing{M<:AbstractMatrix, F} <: SmoothingOperator
     L::M
+    F::F
 end
+
+MatrixSmoothing(L::AbstractMatrix) = MatrixSmoothing(L, invertible_factorization(L))
+
+"""Square invertible smoothing operator: the standard-form transformation `H L⁻¹` exists."""
+const InvertibleSmoothing = MatrixSmoothing{<:AbstractMatrix, <:Factorization}
+
+"""Rectangular or singular smoothing operator: `Lᴴ D L` is singular."""
+const SingularSmoothing = MatrixSmoothing{<:AbstractMatrix, Nothing}
+
+function invertible_factorization(L::AbstractMatrix)
+    size(L, 1) == size(L, 2) || return nothing
+    F = lu(L; check = false)
+    return issuccess(F) ? F : nothing
+end
+
+# L⁻¹ X and L⁻ᴴ X, where X acts on vec(U) (U: nr × ns) and L acts on the rows of U
+smoothing_ldiv(S::InvertibleSmoothing, X, nr) = reshape(S.F \ reshape(X, nr, :), size(X))
+smoothing_ldiv_adjoint(S::InvertibleSmoothing, X, nr) = reshape(S.F' \ reshape(X, nr, :), size(X))
 
 apply(::IdentitySmoothing, U) = U
 apply(S::MatrixSmoothing, U) = S.L * U

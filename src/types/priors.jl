@@ -16,13 +16,17 @@ abstract type NormTerm <: RegularizationTerm end
 """
     Lq(q; L = I)
 
-`ℓq` (quasi-)norm term `R(u) = ‖L u‖_q^q = Σᵢ |(L u)ᵢ|^q`, with `0 < q ≤ 2`.
+`ℓq` (quasi-)norm regularization term `R(u) = ‖L u‖_q^q = Σᵢ |(L u)ᵢ|^q` — equivalently, a
+generalized Gaussian prior of shape `q`. `q = 2` promotes distributed (smooth) sources
+(Tikhonov), `q ≤ 1` localized (sparse) sources (`q = 1`: LASSO). For a matrix unknown `U`,
+`L` acts on the spatial dimension (`L U`) and the norm is taken entry-wise.
 
-* `q = 2`: distributed (smooth) sources — Tikhonov;
-* `q ≤ 1`: localized (sparse) sources — `q = 1` is the LASSO.
+**Inputs**
+- `q` - `Real`: norm (shape) parameter, `0 < q ≤ 2`
+- `L` - `AbstractMatrix` or `UniformScaling`: smoothing operator (identity by default)
 
-`L` is the smoothing operator (identity by default). For a matrix unknown `U`, it acts on
-the spatial dimension (`L U`) and the norm is taken entry-wise.
+**Outputs**
+- `term` - `Lq`: regularization term
 """
 struct Lq{T<:Real, O} <: NormTerm
     q::T
@@ -37,13 +41,21 @@ end
 """
     Lpq(p, q; L = I)
 
-Mixed `ℓp,q` term for matrix unknowns (rows = space, columns = frequency/time):
+Mixed `ℓp,q` regularization term for matrix unknowns (rows = space, columns = frequency or
+time):
 
     R(U) = ‖L U‖_{p,q}^q = Σᵢ (Σⱼ |(L U)ᵢⱼ|^p)^(q/p)
 
-* `q` encodes the prior on the **spatial** distribution (`q ≤ 1` localized, `q = 2` distributed);
-* `p` encodes the prior on the **spectral/temporal** content (`p ≤ 1` narrow-band or impulsive,
-  `p = 2` broadband or continuous).
+**Inputs**
+- `p` - `Real`: norm parameter on the spectral/temporal content, `0 < p ≤ 2` (`p ≤ 1`:
+  narrow-band or impulsive, `p = 2`: broadband or continuous)
+- `q` - `Real`: norm parameter on the spatial distribution, `0 < q ≤ 2` (`q ≤ 1`:
+  localized, `q = 2`: distributed)
+- `L` - `AbstractMatrix` or `UniformScaling`: smoothing operator acting on the spatial
+  dimension (identity by default)
+
+**Outputs**
+- `term` - `Lpq`: regularization term
 """
 struct Lpq{T<:Real, O} <: NormTerm
     p::T
@@ -65,13 +77,20 @@ check_operator(L) = throw(ArgumentError("the smoothing operator must be a matrix
 """
     Groups(rows₁ => term₁, rows₂ => term₂, ...)
 
-Group (region-wise) regularization: `R(u) = Σ_g R_g(L_g u_g)`, where `u_g` gathers the
-rows `rows_g` of the unknown and `L_g` is the smoothing operator of `term_g`
-(identity by default). The groups must form a partition of the rows.
+Group (region-wise) regularization `R(u) = Σ_g R_g(L_g u_g)`, where `u_g` gathers the rows
+`rows_g` of the unknown and `L_g` is the smoothing operator of `term_g`. The groups must
+form a partition of the rows.
 
 ```julia
 Groups(inner => Lq(0.5), boundary => Lq(2.0; L = D₂))
 ```
+
+**Inputs**
+- `rows_g => term_g` - `Pair{<:Any, <:NormTerm}`: row indices of the group and its
+  regularization term (`Lq` or `Lpq`, with its own smoothing operator)
+
+**Outputs**
+- `G` - `Groups`: group regularization term
 """
 struct Groups{T<:Tuple{Vararg{NormTerm}}} <: RegularizationTerm
     rows::Vector{Vector{Int}}
@@ -88,6 +107,13 @@ ngroups(G::Groups) = length(G.terms)
 
 Normalize any regularization term into a validated [`Groups`](@ref) over `nr` rows, so that
 the solvers only have to deal with one representation.
+
+**Inputs**
+- `term` - `RegularizationTerm`: `Lq`, `Lpq` or `Groups`
+- `nr` - `Integer`: number of rows of the unknown
+
+**Outputs**
+- `G` - `Groups`: groups forming a partition of `1:nr`, with consistent smoothing operators
 """
 groups(t::NormTerm, nr::Integer) = groups(Groups([collect(1:nr)], (t,)), nr)
 

@@ -60,14 +60,37 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
 
     @testset "Weighted solves" begin
         Random.seed!(0)
-        for (m, n) in ((12, 8), (8, 12))          # normal equations / push-through identity
-            H = randn(ComplexF64, m, n)
-            y = randn(ComplexF64, m)
-            d = rand(n) .+ 0.1
-            c = InverseProblems.linear_cache(InverseProblem(H, y))
-            u = InverseProblems.weighted_solve(c, InverseProblems.IdentitySmoothing(), reshape(d, :, 1))
-            @test vec(u) ≈ (H'H + Diagonal(d)) \ (H'y)
+        IP = InverseProblems
+        # every regime × smoothing operator × field, against the explicit formulas
+        for T in (Float64, ComplexF64), (nm, nr) in ((12, 8), (8, 8), (5, 8)), ns in (1, 3)
+            Lsq = diagm(nr, nr, 0 => fill(2.0, nr), 1 => -ones(nr - 1))       # square invertible
+            Lrect = diagm(nr, nr, 0 => -ones(nr), 1 => ones(nr - 1))[1:nr-1, :]   # rectangular
+            for (Lop, Lm) in ((IP.IdentitySmoothing(), Matrix(1.0I, nr, nr)),
+                              (IP.MatrixSmoothing(sparse(Lsq)), Lsq),
+                              (IP.MatrixSmoothing(sparse(Lrect)), Lrect))
+                Lg = kron(I(ns), Lm)
+                # dense operator acting on vec(U) (space–time layout when ns > 1)
+                H, y = randn(T, nm * ns, nr * ns), randn(T, nm, ns)
+                c = IP.linear_cache(InverseProblem(H, ns == 1 ? vec(y) : y))
+                @test (c isa IP.Underdetermined) == (nm < nr)
+                D = rand(size(Lm, 1), ns) .+ 0.1
+                A = H'H + Lg' * Diagonal(vec(D)) * Lg
+                @test vec(IP.weighted_solve(c, Lop, D)) ≈ A \ (H' * vec(y))
+                @test IP.posterior_covariance(c, Lop, D) ≈ inv(A)
+                # block-diagonal operator
+                Hs = [randn(T, nm, nr) for _ in 1:ns]
+                cb = IP.linear_cache(InverseProblem(Hs, y))
+                U = IP.weighted_solve(cb, Lop, D)
+                Σ = IP.posterior_covariance(cb, Lop, D)
+                for j in 1:ns
+                    Aj = Hs[j]'Hs[j] + Lm' * Diagonal(D[:, j]) * Lm
+                    @test U[:, j] ≈ Aj \ (Hs[j]' * y[:, j])
+                    @test Σ[j] ≈ inv(Aj)
+                end
+            end
         end
+        @test IP.MatrixSmoothing(sparse([1.0 1; 1 1])) isa IP.SingularSmoothing
+        @test IP.MatrixSmoothing(sparse([1.0 1; 0 1])) isa IP.InvertibleSmoothing
         # Tikhonov with a fixed parameter: closed form
         H, y = randn(15, 10), randn(15)
         s = solve(InverseProblem(H, y), Additive(Lq(2.0); λ = 0.3))

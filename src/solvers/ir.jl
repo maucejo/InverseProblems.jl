@@ -9,8 +9,19 @@
 """
     regularization_parameter(formulation, cache, R, U, W, P)
 
-Regularization parameter(s) at the next iteration, given the current iterate `U`, the
-weights `W` and the group penalties `P`.
+Regularization parameter(s) at the next IR iteration (dispatch on the formulation).
+
+**Inputs**
+- `formulation` - `Additive` or `Multiplicative`: formulation of the problem
+- `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
+- `R` - `Regularization`: assembled regularization
+- `U` - `AbstractMatrix`: current iterate (`nr × ns`)
+- `W` - `AbstractMatrix{<:Real}`: IR weights (size of `L U`)
+- `P` - `AbstractVector{<:Real}`: penalties `R_g(L_g U_g)` of the groups
+
+**Outputs**
+- `λ` - `Real` or `Vector{<:Real}`: regularization parameter, or one per group (additive
+  multi-parameter, MPMR)
 """
 regularization_parameter(f::Additive{<:Any,<:Real}, c, R, U, W, P) = f.λ
 regularization_parameter(f::Additive{<:Any,<:AbstractVector}, c, R, U, W, P) = f.λ
@@ -42,8 +53,21 @@ end
 """
     reweighting(cache, R, formulation, U, ε; tol, maxiter)
 
-IR fixed point started from `U`. The stopping criterion is the relative `ℓ1` variation of
-the solution between two iterations.
+Iteratively Reweighted (IR) fixed point started from `U`. The stopping criterion is the
+relative `ℓ1` variation of the solution between two iterations.
+
+**Inputs**
+- `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
+- `R` - `Regularization`: assembled regularization
+- `formulation` - `Additive` or `Multiplicative`: rule updating the regularization parameter
+- `U` - `AbstractMatrix`: starting point (`nr × ns`)
+- `ε` - `AbstractVector{<:Real}`: damping parameter of each group
+- `tol` - `Real`: tolerance of the stopping criterion
+- `maxiter` - `Integer`: maximum number of iterations
+
+**Outputs**
+- `st` - `NamedTuple`: `U` (solution), `λ` (regularization parameter(s)), `W` (weights), `D`
+  (scaled weights `λ W` of the last linear solve), `converged`, `history`
 """
 function reweighting(c, R::Regularization, f::Formulation, U, ε; tol, maxiter)
     maxiter >= 1 || throw(ArgumentError("maxiter must be ≥ 1"))
@@ -71,8 +95,18 @@ function reweighting(c, R::Regularization, f::Formulation, U, ε; tol, maxiter)
 end
 
 """
-Tikhonov initial solution `(Hᴴ H + α₀ Lᴴ L)⁻¹ Hᴴ y`, `α₀` given by `init`.
-Returns the solution, `α₀` and the unit weights.
+    initial_solution(cache, R, init)
+
+Tikhonov initial solution `(Hᴴ H + α₀ Lᴴ L)⁻¹ Hᴴ y`.
+
+**Inputs**
+- `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
+- `R` - `Regularization`: assembled regularization
+- `init` - `Real` or `ParameterChoice`: initial regularization parameter, or rule selecting it
+
+**Outputs**
+- `U₀` - `Matrix`: initial solution (`nr × ns`)
+- `α₀` - `Real`: initial regularization parameter
 """
 function initial_solution(c, R::Regularization, init)
     W = ones(real(eltype(c)), R.nout, c.ns)
@@ -85,8 +119,19 @@ default_init(::Additive{<:RegularizationTerm,<:AbstractVector}) = LCurve()
 default_init(::Multiplicative) = Heuristic()
 
 """
-Setup shared by all solvers: (whitened) linear cache for the noise covariance `R`, and
-assembled regularization.
+    setup(prob, prior, R)
+
+Setup shared by all solvers: linear cache of the problem whitened by the noise covariance,
+and assembled regularization.
+
+**Inputs**
+- `prob` - `InverseProblem`: inverse problem
+- `prior` - `RegularizationTerm`: regularization term of the formulation
+- `R` - noise covariance (see [`solve`](@ref)), `nothing` if not provided
+
+**Outputs**
+- `c` - `DenseCache` or `BlockCache`: linear cache
+- `reg` - `Regularization`: assembled regularization
 """
 function setup(prob::InverseProblem, prior::RegularizationTerm, R)
     c = linear_cache(prob, R)
@@ -100,16 +145,23 @@ end
 Solve the inverse problem `prob` with the given regularization `formulation`. When the
 algorithm is omitted, [`default_algorithm`](@ref) is used.
 
-# Keywords
-* `R`: noise covariance, known and diagonal — not provided (default, equivalent to `I`), `σ²I`, a `Diagonal`, or the
-  vector (or matrix with the layout of `y`) of the noise variances. The data fidelity is
-  `‖y - Hu‖²_{R⁻¹}`.
-* `covariance`: also compute the posterior covariance of the solution (see
-  [`posterior_std`](@ref), [`credible_interval`](@ref)). For the additive and multiplicative
-  formulations, `R` is then taken as the exact noise covariance.
-* `tol`, `maxiter`: stopping criterion (relative `ℓ1` variation of `u`) and iteration limit.
-* `init`: initial Tikhonov solution — a number (initial regularization parameter) or a
-  [`ParameterChoice`](@ref) (`Heuristic()`, `LCurve()`, `GCV()`, `BayesEstimator()`).
+**Inputs**
+- `prob` - `InverseProblem`: inverse problem
+- `formulation` - `Formulation`: `Additive`, `Multiplicative` or `Bayesian`
+- `algorithm` - `Algorithm`: resolution algorithm (`IR()`, `MAP()`)
+- `R` - `Nothing`, `UniformScaling`, `Diagonal`, `AbstractVector` or `AbstractMatrix`: known
+  diagonal noise covariance — not provided (default, equivalent to `I`), `σ²I`, or the noise
+  variances (vector, or matrix with the layout of `y`). The data fidelity is `‖y - Hu‖²_{R⁻¹}`
+- `covariance` - `Bool`: also compute the posterior covariance of the solution. For the
+  additive and multiplicative formulations, `R` is then taken as the exact noise covariance
+- `tol` - `Real`: tolerance on the relative `ℓ1` variation of `u`
+- `maxiter` - `Integer`: maximum number of iterations
+- `init` - `Real` or `ParameterChoice`: initial Tikhonov solution — initial regularization
+  parameter, or rule selecting it (`Heuristic()`, `LCurve()`, `GCV()`, `BayesEstimator()`)
+
+**Outputs**
+- `sol` - `InverseSolution`: solution, regularization parameter(s), hyperparameters,
+  convergence information and, if requested, posterior covariance
 """
 solve(prob::InverseProblem, f::Formulation; kwargs...) =
     solve(prob, f, default_algorithm(f); kwargs...)

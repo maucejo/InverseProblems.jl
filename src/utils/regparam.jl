@@ -9,6 +9,16 @@
     select_parameter(rule, cache, L, W)
 
 Regularization parameter `λ` of `min ‖y - Hu‖² + λ ‖W^{1/2} L u‖²` chosen by `rule`.
+
+**Inputs**
+- `rule` - `ParameterChoice` or `Real`: `LCurve()`, `GCV()`, `BayesEstimator()`,
+  `Heuristic()`, or a fixed value
+- `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
+- `L` - `SmoothingOperator`: `IdentitySmoothing()` or `MatrixSmoothing`
+- `W` - `AbstractMatrix{<:Real}`: weights (size of `L U`)
+
+**Outputs**
+- `λ` - `Real`: regularization parameter
 """
 function select_parameter(rule::ParameterChoice, c, L::SmoothingOperator, W::AbstractMatrix{<:Real})
     s = spectrum(c, L, W)
@@ -31,8 +41,16 @@ filter_factors(γ, ℓ) = @. γ^2 / (γ^2 + ℓ^2)
 """
     select_parameter(rule, s::NamedTuple, m)
 
-Minimizes the criterion of `rule` w.r.t. `t = log ℓ`: grid search on `lambda_grid`, then
-refinement by Brent's method ([`grid_minimize`](@ref)). Returns `λ = ℓ²`.
+Minimization of the criterion of `rule` w.r.t. `t = log ℓ`: grid search on `lambda_grid`,
+then refinement by Brent's method ([`grid_minimize`](@ref)).
+
+**Inputs**
+- `rule` - `LCurve`, `GCV` or `BayesEstimator`: parameter choice rule
+- `s` - `NamedTuple`: spectral data `(γ, β2, δ0, nfree)` given by [`spectrum`](@ref)
+- `m` - `Integer`: number of data
+
+**Outputs**
+- `λ` - `Real`: regularization parameter `ℓ²`
 """
 function select_parameter(rule::ParameterChoice, s::NamedTuple, m)
     J = criterion(rule, s, m)
@@ -43,14 +61,32 @@ end
 """
     criterion(rule, s, m)
 
-Function of `t = log ℓ` minimized by the parameter choice `rule`, for the spectral data `s`
-and `m` data.
+Criterion minimized by a parameter choice rule (`-κ` for the L-curve).
+
+**Inputs**
+- `rule` - `LCurve`, `GCV` or `BayesEstimator`: parameter choice rule
+- `s` - `NamedTuple`: spectral data `(γ, β2, δ0, nfree)`
+- `m` - `Integer`: number of data
+
+**Outputs**
+- `J` - `Function`: criterion as a function of `t = log ℓ`
 """
 criterion(::LCurve, s, m) = t -> -lcurve_curvature(s, exp(t))
 criterion(::GCV, s, m) = t -> gcv_functional(s, exp(t), m)
 criterion(::BayesEstimator, s, m) = t -> bayes_functional(s, exp(t))
 
-"""Curvature of the L-curve in log-log scale at ℓ (Hansen)."""
+"""
+    lcurve_curvature(s, ℓ)
+
+Curvature of the L-curve in log-log scale (Hansen).
+
+**Inputs**
+- `s` - `NamedTuple`: spectral data `(γ, β2, δ0)`
+- `ℓ` - `Real`: Hansen parameter (`λ = ℓ²`)
+
+**Outputs**
+- `κ` - `Real`: curvature
+"""
 function lcurve_curvature(s, ℓ)
     (; γ, β2, δ0) = s
     f = filter_factors(γ, ℓ)
@@ -61,14 +97,37 @@ function lcurve_curvature(s, ℓ)
     return 2η * ρ / dη * (ℓ^2 * dη * ρ + 2ℓ * η * ρ + ℓ^4 * η * dη) / (ℓ^2 * η^2 + ρ^2)^(3 / 2)
 end
 
-"""Generalized cross validation functional at ℓ."""
+"""
+    gcv_functional(s, ℓ, m)
+
+Generalized cross validation functional.
+
+**Inputs**
+- `s` - `NamedTuple`: spectral data `(γ, β2, δ0, nfree)`
+- `ℓ` - `Real`: Hansen parameter (`λ = ℓ²`)
+- `m` - `Integer`: number of data
+
+**Outputs**
+- `G` - `Real`: `‖y - Hu‖² / (m - nfree - Σ fᵢ)²`
+"""
 function gcv_functional(s, ℓ, m)
     (; γ, β2, δ0, nfree) = s
     f = filter_factors(γ, ℓ)
     return (sum(@. (1 - f)^2 * β2) + δ0) / (m - nfree - sum(f))^2
 end
 
-"""Functional `J_MAP` of the Bayesian estimator at ℓ (`reg_param_bayes`)."""
+"""
+    bayes_functional(s, ℓ)
+
+Functional `J_MAP` of the Bayesian estimator (`reg_param_bayes`).
+
+**Inputs**
+- `s` - `NamedTuple`: spectral data `(γ, β2)`
+- `ℓ` - `Real`: Hansen parameter (`λ = ℓ²`)
+
+**Outputs**
+- `J` - `Real`: `Σ log(γᵢ² + ℓ²) + (M - 2) log(Σ |βᵢ|²/(γᵢ² + ℓ²) / M)`
+"""
 function bayes_functional(s, ℓ)
     (; γ, β2) = s
     M = length(γ)
@@ -77,7 +136,20 @@ function bayes_functional(s, ℓ)
 end
 
 """
-Heuristic initial parameter (Aucejo & De Smet, MSSP 2017): median of a geometric grid spanning the admissible range of the squared (generalized) singular values, i.e. their geometric mean. When `Hᴴ H + Lᴴ L` restricted to the regularized components is rank deficient, the lower bound is `16 eps` times the upper one.
+    select_parameter(::Heuristic, cache, L, W)
+
+Heuristic initial parameter (Aucejo & De Smet, MSSP 2017): median of a geometric grid
+spanning the admissible range of the squared (generalized) singular values, i.e. their
+geometric mean. When the problem is rank deficient, the lower bound is `16 eps` times the
+upper one.
+
+**Inputs**
+- `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
+- `L` - `SmoothingOperator`: `IdentitySmoothing()` or `MatrixSmoothing`
+- `W` - `AbstractMatrix{<:Real}`: weights (size of `L U`)
+
+**Outputs**
+- `α₀` - `Real`: initial regularization parameter
 """
 function select_parameter(::Heuristic, c::Union{DenseCache,BlockCache}, L::SmoothingOperator,
                           W::AbstractMatrix{<:Real})

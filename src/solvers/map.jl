@@ -39,9 +39,23 @@ update_noise_precision(τ::Real, F, N, r2) = float(τ)
           inner_tol = 1e-4, inner_maxiter = 100, init = LCurve())
 
 Optimal Bayesian regularization: MAP of the hierarchical model, alternating the updates of
-`q_g`, `τs_g`, `τn` (those marked `Estimated()`) and of `u` (IR algorithm). With
-`covariance = true`, the posterior covariance `(τn (H̃ᴴH̃ + LᴴDL))⁻¹` of the Gaussian
-approximation at the MAP is returned (`H̃ = R^{-1/2} H`).
+`q_g`, `τs_g`, `τn` (those marked `Estimated()`) and of `u` (IR algorithm).
+
+**Inputs**
+- `prob` - `InverseProblem`: inverse problem
+- `f` - `Bayesian`: Bayesian formulation
+- `R` - noise covariance (see [`solve`](@ref)), `nothing` if not provided
+- `covariance` - `Bool`: also compute the posterior covariance `(τn (H̃ᴴH̃ + LᴴDL))⁻¹` of the
+  Gaussian approximation at the MAP (`H̃ = R^{-1/2} H`)
+- `tol` - `Real`: tolerance on the relative `ℓ1` variation of `u` (outer loop)
+- `maxiter` - `Integer`: maximum number of outer iterations
+- `inner_tol` - `Real`: tolerance of the IR algorithm (u-step)
+- `inner_maxiter` - `Integer`: maximum number of IR iterations
+- `init` - `Real` or `ParameterChoice`: rule for the initial single-parameter solution
+
+**Outputs**
+- `sol` - `InverseSolution`: MAP estimate, `λ = τs/(c τn)`, hyperparameters `(τn, τs, q)`
+  in `sol.hyper`, convergence information and, if requested, posterior covariance
 """
 function solve(prob::InverseProblem, f::Bayesian, ::MAP; R = nothing, covariance::Bool = false,
                tol = 1e-4, maxiter = 100, inner_tol = 1e-4, inner_maxiter = 100,

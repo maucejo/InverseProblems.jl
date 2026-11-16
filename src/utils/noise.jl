@@ -5,9 +5,18 @@
 """
     noise_variances(R, y)
 
-Diagonal of the noise covariance `R`, as an array with the layout of `y`, or `nothing` when
-`R = I`. `R` can be `I` (or `σ²I`), a `Diagonal`, a vector of variances (`length(y)`), a
-matrix of variances with the size of `y`, or a diagonal `length(y) × length(y)` matrix.
+Diagonal of the known noise covariance `R`, with the layout of the data.
+
+**Inputs**
+- `R` - `Nothing`, `UniformScaling`, `Diagonal`, `AbstractVector{<:Real}` or
+  `AbstractMatrix{<:Real}`: noise covariance — not provided, `σ²I`, `Diagonal`, vector of
+  variances (`length(y)`), matrix of variances (size of `y`) or diagonal
+  `length(y) × length(y)` matrix
+- `y` - `AbstractVecOrMat`: measured data
+
+**Outputs**
+- `σ2` - `Array{<:Real}` or `Nothing`: noise variances with the layout of `y`, `nothing`
+  when `R` is not provided or is `I`
 """
 noise_variances(::Nothing, y) = nothing   # R not provided: R = I
 noise_variances(R::UniformScaling, y) =

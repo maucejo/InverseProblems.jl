@@ -15,17 +15,19 @@ abstract type Formulation end
 
 Additive regularization
 
-    û = argmin ‖y - Hu‖₂² + Σ_g λ_g R_g(L_g u_g)
+    û = argmin ‖y - Hu‖²_{R⁻¹} + Σ_g λ_g R_g(L_g u_g)
 
-`λ` can be
+`Lq(2.0)` gives the Tikhonov regularization, `Lq(1.0)` the LASSO, [`Groups`](@ref) the
+group generalized Tikhonov regularization.
 
-* a number: fixed regularization parameter;
-* a vector (one entry per group): multi-parameter additive regularization;
-* a [`ParameterChoice`](@ref) (`LCurve()`, `GCV()`, `BayesEstimator()`): selected at each
-  iteration of the reweighting algorithm.
+**Inputs**
+- `prior` - `RegularizationTerm`: regularization term (`Lq`, `Lpq` or `Groups`)
+- `λ` - `Real`, `AbstractVector{<:Real}` or `ParameterChoice`: fixed regularization
+  parameter, one parameter per group (multi-parameter regularization), or rule selecting it
+  at each iteration (`LCurve()`, `GCV()`, `BayesEstimator()`)
 
-`prior` is a [`RegularizationTerm`](@ref): `Lq(2.0)` gives the Tikhonov regularization,
-`Lq(1.0)` the LASSO, [`Groups`](@ref) the group generalized Tikhonov regularization.
+**Outputs**
+- `f` - `Additive`: formulation, to be passed to [`solve`](@ref)
 """
 struct Additive{R<:RegularizationTerm, P} <: Formulation
     prior::R
@@ -54,15 +56,16 @@ struct ProductCoupling <: Coupling end  # multi-parameter multiplicative regular
 
 Multiplicative regularization — no regularization parameter to tune beforehand:
 
-* `multiparameter = false` (default): ordinary multiplicative regularization (OMR)
-
-      û = argmin ‖y - Hu‖₂² · Σ_g R_g(L_g u_g)
-
-* `multiparameter = true`: multi-parameter multiplicative regularization (MPMR)
-
-      û = argmin ‖y - Hu‖₂² · Π_g R_g(L_g u_g)
-
+* ordinary multiplicative regularization (OMR): `û = argmin ‖y - Hu‖² · Σ_g R_g(L_g u_g)`
+* multi-parameter multiplicative regularization (MPMR): `û = argmin ‖y - Hu‖² · Π_g R_g(L_g u_g)`,
   which yields one adaptive regularization parameter per group.
+
+**Inputs**
+- `prior` - `RegularizationTerm`: regularization term (`Lq`, `Lpq` or `Groups`)
+- `multiparameter` - `Bool`: `false` for the OMR (default), `true` for the MPMR
+
+**Outputs**
+- `f` - `Multiplicative`: formulation, to be passed to [`solve`](@ref)
 """
 struct Multiplicative{R<:RegularizationTerm, C<:Coupling} <: Formulation
     prior::R
@@ -99,18 +102,22 @@ covariance given to [`solve`](@ref)) and, for each group, a generalized Gaussian
 
     p(u, τn, τs, q | y) ∝ p(y | u, τn) Π_g p(L_g u_g | τs_g, q_g) p(τs_g) p(q_g) p(τn)
 
-Each hyperparameter is either optimized (`Estimated()`) or fixed:
+Each hyperparameter is either optimized (`Estimated()`) or fixed. Real and complex data lead
+to different distributions (real or circular complex normal and generalized Gaussian laws).
+Weakly informative Gamma hyperpriors are used for the estimated hyperparameters.
 
-* `τn`: a number or `Estimated()`. `τn = 1` means that `R` is the exact noise covariance;
-  with `Estimated()`, `R` is only known up to a scale factor. By default, `τn = 1` when `R`
-  is given to [`solve`](@ref), and `τn` is estimated otherwise;
-* `τs`: a number (all groups) or a vector (one value per group);
-* `q`: `Fixed()` keeps the shapes given in `prior` (`Lq(q_g)`); with `Estimated()`, they are
-  the starting point of the search in `shape_bounds`.
+**Inputs**
+- `prior` - `RegularizationTerm`: `Lq` terms (possibly in `Groups`) giving the initial
+  shapes `q_g` and the smoothing operators
+- `τn` - `Real` or `Estimated`: noise precision. `τn = 1` means that `R` is the exact noise
+  covariance. By default, `τn = 1` when `R` is given to `solve`, estimated otherwise
+- `τs` - `Estimated`, `Real` or `AbstractVector{<:Real}`: signal precisions (one value for
+  all groups or one per group)
+- `q` - `Estimated` or `Fixed`: shape parameters estimated, or kept at the values of `prior`
+- `shape_bounds` - `Tuple{Real,Real}`: search interval of the estimated shape parameters
 
-Real and complex data lead to different distributions (real or circular complex normal and
-generalized Gaussian laws). Weakly informative Gamma hyperpriors are used for the estimated
-hyperparameters, as recommended in the papers.
+**Outputs**
+- `f` - `Bayesian`: formulation, to be passed to [`solve`](@ref)
 """
 struct Bayesian{R<:RegularizationTerm, N, S, Q<:Union{Estimated,Fixed}} <: Formulation
     prior::R

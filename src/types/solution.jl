@@ -1,20 +1,23 @@
 """
     InverseSolution
 
-Result of [`solve`](@ref).
+Result of [`solve`](@ref). See [`posterior_std`](@ref), [`posterior_samples`](@ref) and
+[`credible_interval`](@ref) for the posterior uncertainty.
 
-# Fields
-* `u`: reconstructed unknown (vector or `nr × ns` matrix, same layout as the problem);
-* `λ`: final regularization parameter(s) — the adaptive one for multiplicative formulations,
-  `τs ./ (c τn)` for the Bayesian formulation;
-* `hyper`: `NamedTuple` of the other quantities (`τn`, `τs`, `q` for the Bayesian formulation);
-* `iterations`: number of iterations of the outer loop;
-* `converged`: whether the stopping criterion was met;
-* `history`: stopping criterion (relative `ℓ1` variation of `u`) at each iteration;
-* `covariance`: posterior covariance of `vec(u)` (`solve(...; covariance = true)`), a vector
-  of `nr × nr` matrices (one per sample) for block-diagonal operators, `nothing` otherwise.
-
-See [`posterior_std`](@ref) and [`credible_interval`](@ref).
+**Fields**
+- `u` - `AbstractVector` or `AbstractMatrix`: reconstructed unknown (vector, or `nr × ns`
+  matrix, with the layout of the problem)
+- `λ` - `Real` or `Vector{<:Real}`: final regularization parameter(s) — the adaptive one for
+  the multiplicative formulations, `τs ./ (c τn)` for the Bayesian formulation
+- `hyper` - `NamedTuple`: other estimated quantities (`τn`, `τs`, `q` for the Bayesian
+  formulation, empty otherwise)
+- `iterations` - `Int`: number of iterations of the outer loop
+- `converged` - `Bool`: whether the stopping criterion was met
+- `history` - `Vector{Float64}`: stopping criterion (relative `ℓ1` variation of `u`) at each
+  iteration
+- `covariance` - `Nothing`, `Hermitian` or `Vector{<:Hermitian}`: posterior covariance of
+  `vec(u)` when `solve(...; covariance = true)` — one matrix for a dense operator, one
+  `nr × nr` matrix per sample for a block-diagonal operator, `nothing` otherwise
 """
 struct InverseSolution{U, L, H<:NamedTuple, C}
     u::U

@@ -27,7 +27,14 @@ struct MAP <: Algorithm end
 """
     default_algorithm(formulation)
 
-Algorithm used by `solve(prob, formulation)`.
+Algorithm used by `solve(prob, formulation)` when none is given.
+
+**Inputs**
+- `formulation` - `Formulation`: `Additive`, `Multiplicative` or `Bayesian`
+
+**Outputs**
+- `alg` - `Algorithm`: `IR()` for the additive and multiplicative formulations, `MAP()` for
+  the Bayesian formulation
 """
 default_algorithm(::Additive) = IR()
 default_algorithm(::Multiplicative) = IR()

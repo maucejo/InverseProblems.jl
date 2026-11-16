@@ -5,7 +5,14 @@
 """
     penalty(term, V)
 
-Value of the norm part of the regularization term, evaluated on `V = L U`.
+Value of a regularization term.
+
+**Inputs**
+- `term` - `Lq` or `Lpq`: regularization term
+- `V` - `AbstractArray`: argument `L U` of the term
+
+**Outputs**
+- `p` - `Real`: `‖V‖_q^q` or `‖V‖_{p,q}^q`
 """
 penalty(t::Lq, V) = sum(x -> abs(x)^t.q, V)
 
@@ -19,7 +26,14 @@ end
 """
     penalty(R, V)
 
-Total regularization `Σ_g R_g(V[rows_g, :])` evaluated on `V = L U`.
+Total regularization `Σ_g R_g(V[rows_g, :])`.
+
+**Inputs**
+- `R` - `Regularization`: assembled regularization
+- `V` - `AbstractMatrix`: argument `L U` of the regularization
+
+**Outputs**
+- `p` - `Real`: sum of the group penalties
 """
 penalty(R::Regularization, V) =
     sum(penalty(R.terms[g], view(V, R.rows[g], :)) for g in eachindex(R.terms))
@@ -27,7 +41,15 @@ penalty(R::Regularization, V) =
 """
     damping(V, level = 0.05)
 
-Damping parameter `ε` avoiding infinite weights: `level` of the values of `|V|` are less than or equal to `ε` (cumulative histogram rule used throughout the papers).
+Damping parameter `ε` avoiding infinite IR weights: a fraction `level` of the values of
+`|V|` are less than or equal to `ε` (cumulative histogram rule used throughout the papers).
+
+**Inputs**
+- `V` - `AbstractArray`: argument `L U` of the regularization term (initial solution)
+- `level` - `Real`: fraction of the values below `ε`
+
+**Outputs**
+- `ε` - `Real`: damping parameter (`eps()` if the quantile is zero)
 """
 function damping(V, level = 0.05)
     a = vec(abs.(V))

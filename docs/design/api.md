@@ -125,6 +125,34 @@ Bayesian(Lq(2.0); τn = 1.0, τs = 0.5, q = Fixed())      # tout fixé : posteri
 `init` (paramètre de la solution de Tikhonov initiale : `Heuristic()`, `LCurve()`, `GCV()`,
 `BayesEstimator()` ou un nombre).
 
+## Résolution linéaire : régime du problème et identité de Woodbury
+
+Tous les algorithmes se ramènent à des résolutions de `(Hᴴ H + Lᴴ D L) u = Hᴴ y` (`D`
+diagonale positive, `H` blanchie) et, pour la covariance a posteriori, à l'inverse de la même
+matrice. Le régime du problème est un paramètre de type du cache (`Overdetermined` si
+`nm ≥ nr`, `Underdetermined` si `nm < nr`) ; la méthode est choisie par dispatch :
+
+| régime                              | `L`                  | méthode                                  | système factorisé |
+|:------------------------------------|:---------------------|:-----------------------------------------|:------------------|
+| `nm ≥ nr` (sur- ou parfaitement déterminé) | quelconque    | équations normales                       | `nr × nr`         |
+| `nm < nr` (sous-déterminé)          | `I`                  | identité de Woodbury                     | `nm × nm`         |
+| `nm < nr`                           | carrée inversible    | Woodbury sur la forme standard `H̃ = H L⁻¹` | `nm × nm`         |
+| `nm < nr`                           | rectangulaire / singulière | équations normales (`Lᴴ D L` singulière : Woodbury inapplicable) | `nr × nr` |
+
+avec
+
+    (Hᴴ H + D)⁻¹ Hᴴ y = D⁻¹ Hᴴ (I + H D⁻¹ Hᴴ)⁻¹ y
+    (Hᴴ H + D)⁻¹      = D⁻¹ − D⁻¹ Hᴴ (I + H D⁻¹ Hᴴ)⁻¹ H D⁻¹
+    (Hᴴ H + Lᴴ D L)⁻¹ = L⁻¹ (H̃ᴴ H̃ + D)⁻¹ L⁻ᴴ                       (L carrée inversible)
+
+Dans le cas parfaitement déterminé (`nm = nr`), les deux systèmes ont la même taille ; les
+équations normales sont utilisées (`Hᴴ H` est alors calculée une seule fois). Dans le cas
+sous-déterminé, `Hᴴ H` n'est ni stockée ni calculée, sauf pour un `L` rectangulaire.
+L'inversibilité d'un `L` carré est testée une fois à l'assemblage (factorisation LU creuse,
+`InvertibleSmoothing` / `SingularSmoothing`). Pour l'opérateur bloc-diagonal, chaque fréquence
+suit ce schéma indépendamment ; pour l'espace–temps, `L` agit par blocs (`I ⊗ L`).
+L'initialisation de `τn` utilise également Woodbury : `yᴴ(I + H M⁻¹ Hᴴ)⁻¹y = yᴴ(y − H û)`.
+
 ## Organisation du code
 
 ```
@@ -140,7 +168,7 @@ src/
 ├── utils/                  # fonctions internes
 │   ├── smoothing.jl        # assemblage des L_g en opérateur de lissage global
 │   ├── noise.jl            # covariance du bruit R, blanchiment des données
-│   ├── linsolve.jl         # caches, résolutions de Tikhonov pondérées, covariance a posteriori
+│   ├── linsolve.jl         # caches (régime), résolutions pondérées (équations normales / Woodbury), covariance
 │   ├── minimize.jl         # minimisation 1D : Brent, recherche sur grille raffinée
 │   ├── spectrum.jl         # SVD / GSVD du problème sous forme standard
 │   ├── regparam.jl         # L-curve, GCV, estimateur bayésien, heuristique

@@ -3,8 +3,14 @@
 """
     posterior_std(sol)
 
-Posterior standard deviation of each entry of `sol.u` (same layout), from the diagonal of
-the posterior covariance. Requires `solve(...; covariance = true)`.
+Posterior standard deviation of each entry of the solution, from the diagonal of the
+posterior covariance.
+
+**Inputs**
+- `sol` - `InverseSolution`: solution obtained with `solve(...; covariance = true)`
+
+**Outputs**
+- `σ` - `Array{<:Real}`: standard deviations, with the layout of `sol.u`
 """
 posterior_std(sol::InverseSolution) = marginal_std(sol.covariance, sol.u)
 
@@ -22,9 +28,16 @@ for complex unknowns), with `μ = sol.u`:
 
     u_sample = μ + S z,   Σ = S Sᴴ (Cholesky),   z ~ randn(eltype(μ))
 
-Returns an array of size `(size(sol.u)..., nsamples)`. For block-diagonal operators, each
-sample (frequency) is drawn from its own `nr × nr` covariance.
-Requires `solve(...; covariance = true)`.
+For block-diagonal operators, each sample (frequency) is drawn from its own `nr × nr`
+covariance.
+
+**Inputs**
+- `sol` - `InverseSolution`: solution obtained with `solve(...; covariance = true)`
+- `nsamples` - `Integer`: number of samples
+- `rng` - `AbstractRNG`: random number generator
+
+**Outputs**
+- `X` - `Array`: samples, of size `(size(sol.u)..., nsamples)`
 """
 function posterior_samples(sol::InverseSolution, nsamples::Integer = 10_000;
                            rng::AbstractRNG = Random.default_rng())
@@ -55,14 +68,21 @@ end
 """
     credible_interval(sol; level = 0.95, nsamples = 10_000, rng = Random.default_rng())
 
-Bayesian credible interval `(lower, upper)` of each entry of `sol.u`, estimated by sampling
-the posterior ([`posterior_samples`](@ref)): `lower` and `upper` are the empirical quantiles
-`(1 - level)/2` and `(1 + level)/2` of the samples, entry by entry.
+Bayesian credible interval of each entry of the solution, estimated by sampling the posterior
+([`posterior_samples`](@ref)): empirical quantiles `(1 - level)/2` and `(1 + level)/2` of the
+samples, entry by entry. For complex unknowns, the quantiles are computed separately on the
+real and imaginary parts.
 
-For complex unknowns, the quantiles are computed separately on the real and imaginary
-parts: `real(lower) ≤ real(u) ≤ real(upper)` and `imag(lower) ≤ imag(u) ≤ imag(upper)`.
+**Inputs**
+- `sol` - `InverseSolution`: solution obtained with `solve(...; covariance = true)`
+- `level` - `Real`: credibility level, in `]0, 1[`
+- `nsamples` - `Integer`: number of samples
+- `rng` - `AbstractRNG`: random number generator
 
-Requires `solve(...; covariance = true)`.
+**Outputs**
+- `lower` - `Array`: lower bounds, with the layout of `sol.u` (complex for complex unknowns:
+  `real(lower) ≤ real(u)`, `imag(lower) ≤ imag(u)`)
+- `upper` - `Array`: upper bounds, with the layout of `sol.u`
 """
 function credible_interval(sol::InverseSolution; level = 0.95, nsamples::Integer = 10_000,
                            rng::AbstractRNG = Random.default_rng())

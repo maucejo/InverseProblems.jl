@@ -34,8 +34,8 @@ unknown_size(op::BlockDiagonalOperator) = (size(first(op.blocks), 2), length(op.
 """
     InverseProblem(H, y)
 
-Linear inverse problem `y = H u + n`. The method chosen by the constructor depends on
-the types of `H` and `y`:
+Linear inverse problem `y = H u + n`. The layout of the unknown depends on the types of `H`
+and `y`:
 
 | `H`                                   | `y`                 | unknown `u`             | use case        |
 |:--------------------------------------|:--------------------|:------------------------|:----------------|
@@ -44,8 +44,16 @@ the types of `H` and `y`:
 | `AbstractArray{T,3}` (`nm × nr × nf`) | `AbstractMatrix` (`nm × nf`) | matrix `nr × nf` | space–frequency |
 | `AbstractMatrix` (`nm·nt × nr·nt`)    | `AbstractMatrix` (`nm × nt`) | matrix `nr × nt` | space–time      |
 
-Rows of the unknown always correspond to reconstruction points, so that
-[`Groups`](@ref) and mixed norms [`Lpq`](@ref) have the same meaning whatever the domain.
+Rows of the unknown always correspond to reconstruction points, so that [`Groups`](@ref),
+smoothing operators and mixed norms [`Lpq`](@ref) have the same meaning whatever the domain.
+
+**Inputs**
+- `H` - `AbstractMatrix`, `AbstractVector{<:AbstractMatrix}` or `AbstractArray{T,3}`: forward
+  operator (transfer functions or convolution matrix)
+- `y` - `AbstractVector` or `AbstractMatrix`: measured data
+
+**Outputs**
+- `prob` - `InverseProblem`: the inverse problem, to be passed to [`solve`](@ref)
 """
 struct InverseProblem{Op<:LinearOperator, Y<:AbstractVecOrMat}
     H::Op

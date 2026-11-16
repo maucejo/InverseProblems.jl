@@ -39,10 +39,21 @@ shape(t::NormTerm) =
     throw(ArgumentError("the Bayesian formulation requires Lq terms (generalized Gaussian priors), got $(typeof(t))"))
 
 """
-Negative log full conditional of the shape parameter `q` of a group `v` (`M` components,
-real dimension `k` per component):
+    shape_objective(q, τ, logabs, M, k)
+
+Negative log full conditional of the shape parameter `q` of a group:
 
     M log Γ(k/q) - (kM/q) log τ - (a + M - 1) log q + b q + τ Σ|vᵢ|^q
+
+**Inputs**
+- `q` - `Real`: shape parameter
+- `τ` - `Real`: precision of the group
+- `logabs` - `AbstractVector{<:Real}`: `log|vᵢ|` of the non-zero components of the group
+- `M` - `Integer`: number of components of the group
+- `k` - `Integer`: real dimension of a component (1 real, 2 complex)
+
+**Outputs**
+- `J` - `Real`: value of the objective
 """
 function shape_objective(q, τ, logabs, M, k)
     s = sum(x -> exp(q * x), logabs; init = 0.0)
@@ -51,7 +62,19 @@ function shape_objective(q, τ, logabs, M, k)
 end
 
 """
-Optimal shape parameter in `[lb, ub]` (grid search refined by Brent's method).
+    optimal_shape(F, v, τ, (lb, ub); npoints = 200)
+
+Optimal shape parameter of a group (grid search refined by Brent's method).
+
+**Inputs**
+- `F` - `Field`: `RealField()` or `ComplexField()`
+- `v` - `AbstractArray`: components `L_g u_g` of the group
+- `τ` - `Real`: precision of the group
+- `(lb, ub)` - `Tuple{Real,Real}`: search interval
+- `npoints` - `Integer`: number of points of the search grid
+
+**Outputs**
+- `q` - `Real`: mode of the full conditional of the shape parameter
 """
 function optimal_shape(F::Field, v, τ, (lb, ub); npoints = 200)
     k = prior_dimension(F)
@@ -60,10 +83,35 @@ function optimal_shape(F::Field, v, τ, (lb, ub); npoints = 200)
     return grid_minimize(q -> shape_objective(q, τ, logabs, M, k), range(lb, ub; length = npoints))
 end
 
-"""Mode of the full conditional of the precision of a group (`M` components)."""
+"""
+    signal_precision(F, v, q)
+
+Mode of the full conditional of the precision of a group.
+
+**Inputs**
+- `F` - `Field`: `RealField()` or `ComplexField()`
+- `v` - `AbstractArray`: components `L_g u_g` of the group
+- `q` - `Real`: shape parameter of the group
+
+**Outputs**
+- `τs` - `Real`: signal precision `(k M / q + a - 1) / (Σ|vᵢ|^q + b)`
+"""
 signal_precision(F::Field, v, q) =
     (prior_dimension(F) * length(v) / q + HYPER_A - 1) / (sum(x -> abs(x)^q, v) + HYPER_B)
 
-"""Mode of the full conditional of the noise precision (`N` data, squared misfit `r2`)."""
+"""
+    noise_precision(F, N, r2)
+
+Mode of the full conditional of the noise precision.
+
+**Inputs**
+- `F` - `Field`: `RealField()` or `ComplexField()`
+- `N` - `Integer`: number of data
+- `r2` - `Real`: squared (whitened) data misfit `‖y - Hu‖²`
+
+**Outputs**
+- `τn` - `Real`: noise precision `(ν + a - 1) / (c r2 + b)` (`ν = N/2, c = 1/2` real,
+  `ν = N, c = 1` complex)
+"""
 noise_precision(F::Field, N, r2) =
     (noise_exponent(F, N) + HYPER_A - 1) / (misfit_factor(F) * r2 + HYPER_B)

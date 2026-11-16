@@ -3,14 +3,20 @@
 """
     spectrum(cache, L, W)
 
-Spectral description of `min ‖y - Hu‖² + λ ‖W^{1/2} L u‖²` used by the parameter choice rules:
+Spectral description of `min ‖y - Hu‖² + λ ‖W^{1/2} L u‖²` used by the parameter choice
+rules: SVD of `H W^{-1/2}` when `L = I`, generalized SVD of `(H, W^{1/2} L)` otherwise.
 
-* `γ`: (generalized) singular values of the regularized components;
-* `β2`: squared Fourier coefficients `|Uᴴ y|²` of these components;
-* `δ0`: part of `‖y‖²` outside the range of `H`;
-* `nfree`: number of unregularized components (null space of `L`).
+**Inputs**
+- `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
+- `L` - `SmoothingOperator`: `IdentitySmoothing()` or `MatrixSmoothing`
+- `W` - `AbstractMatrix{<:Real}`: weights (size of `L U`)
 
-SVD of `H W^{-1/2}` when `L = I`, generalized SVD of `(H, W^{1/2} L)` otherwise.
+**Outputs**
+- `s` - `NamedTuple`:
+  - `γ`: (generalized) singular values of the regularized components
+  - `β2`: squared Fourier coefficients `|Uᴴ y|²` of these components
+  - `δ0`: part of `‖y‖²` outside the range of `H`
+  - `nfree`: number of unregularized components (null space of `L`)
 """
 function spectrum(c::DenseCache, ::IdentitySmoothing, W::AbstractMatrix{<:Real})
     F = svd(c.H ./ transpose(sqrt.(vec(W))))
