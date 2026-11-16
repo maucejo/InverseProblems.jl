@@ -4,14 +4,13 @@
 #     p(v_i | τ_i) ∝ exp(-φ τ_i |v_i|²),   τ_i ~ Gamma(a, b)       (φ = 1/2 real, 1 complex)
 # The MAP alternates the closed-form updates
 #     τ_i = (k/2 + a - 1) / (φ |v_i|² + b),   τn (if estimated),
-#     u   = (Hᴴ H + Lᴴ Λ L)⁻¹ Hᴴ y,   Λ = φ τ / (c τn)
+#     u   = (Hᴴ H + Lᴴ Λ L)⁻¹ Hᴴ y,   Λ = φ τ / (c τn) = τ / τn
 # (normal equations or Woodbury identity, see `linsolve.jl`).
 
 """
     lambda_max(cache)
 
-Initial Tikhonov parameter of the element-wise algorithm, `‖2 Hᴴ y‖∞` (computed per sample
-for a block-diagonal operator).
+Initial Tikhonov parameter of the element-wise algorithm, `‖2 Hᴴ y‖∞` (computed per sample for a block-diagonal operator).
 
 **Inputs**
 - `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
@@ -28,14 +27,9 @@ initial_weights(c::BlockCache, reg, λ::AbstractVector) = repeat(transpose(float
 initial_weights(c::BlockCache, reg, λ::Real) = fill(float(λ), reg.nout, c.ns)
 
 """
-    solve(prob, f::Bayesian, ElementWise(); R = nothing, covariance = false, tol = 1e-8,
-          maxiter = 200, init = nothing)
+    solve(prob, f::Bayesian, ElementWise(); R = nothing, covariance = false, tol = 1e-8, maxiter = 200, init = nothing)
 
-Element-wise Bayesian regularization (Relevance Vector Regression): MAP of a hierarchical
-model where each component of `L u` has its own Gaussian prior precision `τ_i`, alternating
-the updates of the precisions, of `τn` (if `Estimated()`) and of `u`. Only the smoothing
-operators of `f.prior` are used: the prior is Gaussian (`q = 2`), so all its terms must be
-`Lq(2.0)`, and the signal precisions must be `Estimated()`.
+Element-wise Bayesian regularization (Relevance Vector Regression): MAP of a hierarchical model where each component of `L u` has its own Gaussian prior precision `τ_i`, alternating the updates of the precisions, of `τn` (if `Estimated()`) and of `u`. Only the smoothing operators of `f.prior` are used: the prior is Gaussian (`q = 2`), so all its terms must be `Lq(2.0)`, and the signal precisions must be `Estimated()`.
 
 **Inputs**
 - `prob` - `InverseProblem`: inverse problem
@@ -45,14 +39,10 @@ operators of `f.prior` are used: the prior is Gaussian (`q = 2`), so all its ter
   (`H̃ = R^{-1/2} H`)
 - `tol` - `Real`: tolerance on the relative `ℓ1` variation of `u`
 - `maxiter` - `Integer`: maximum number of iterations
-- `init` - `Nothing`, `Real` or `ParameterChoice`: initial Tikhonov parameter — by default
-  `‖2 Hᴴ y‖∞` (per sample for a block-diagonal operator)
+- `init` - `Nothing`, `Real` or `ParameterChoice`: initial Tikhonov parameter — by default `‖2 Hᴴ y‖∞` (per sample for a block-diagonal operator)
 
 **Outputs**
-- `sol` - `InverseSolution`: MAP estimate, element-wise regularization parameters
-  `Λ = φ τ / (c τn)` (layout of `L u`) in `sol.λ`, hyperparameters `(τn, τs)` in `sol.hyper`
-  (`τs`: element-wise precisions), convergence information and, if requested, posterior
-  covariance
+- `sol` - `InverseSolution`: MAP estimate, element-wise regularization parameters `Λ = τ / τn` (layout of `L u`; MAP `½‖y - Hu‖²_R + ½ Σᵢ Λᵢ |vᵢ|²` for real data, `‖y - Hu‖²_R + Σᵢ Λᵢ |vᵢ|²` for complex data) in `sol.λ`, hyperparameters `(τn, τs)` in `sol.hyper` (`τs`: element-wise precisions), convergence information and, if requested, posterior covariance
 """
 function solve(prob::InverseProblem, f::Bayesian, ::ElementWise; R = nothing,
                covariance::Bool = false, tol = 1e-8, maxiter = 200, init = nothing)
@@ -65,21 +55,25 @@ function solve(prob::InverseProblem, f::Bayesian, ::ElementWise; R = nothing,
     N = ndata(c)
     τnspec = noise_spec(f.τn, R)
 
-    U = weighted_solve(c, reg.L, initial_weights(c, reg, initial_lambda(init, c, reg)))
-    τn = update_noise_precision(τnspec, F, N, residual_norm2(c, U))
-    τs = elementwise_precision(F, apply(reg.L, U))
-    D = prior_factor(F, 2.0) .* τs ./ (misfit_factor(F) * τn)
+    sys = linear_system(c, reg.L)
+    U = Matrix{eltype(c)}(undef, c.nr, c.ns)
+    Unew = similar(U)
+    weighted_solve!(U, sys, initial_weights(c, reg, initial_lambda(init, c, reg)))
+    Vbuf = smoothing_buffer(reg.L, U)
+    τs = zeros(real(eltype(c)), reg.nout, c.ns)
+    D = similar(τs)
+    τn = 1.0
 
-    history = Float64[]
+    history = sizehint!(Float64[], maxiter)
     converged = false
     for _ in 1:maxiter
-        τs = elementwise_precision(F, apply(reg.L, U))
-        τn = update_noise_precision(τnspec, F, N, residual_norm2(c, U))
-        D = prior_factor(F, 2.0) .* τs ./ (misfit_factor(F) * τn)
-        Unew = weighted_solve(c, reg.L, D)
-        crit = sum(abs, Unew - U) / max(sum(abs, U), floatmin(Float64))
+        elementwise_precision!(τs, F, apply!(Vbuf, reg.L, U))
+        τn = update_noise_precision(τnspec, F, N, residual_norm2!(sys, U))
+        D .= prior_factor(F, 2.0) .* τs ./ (misfit_factor(F) * τn)
+        weighted_solve!(Unew, sys, D)
+        crit = relative_change(Unew, U)
         push!(history, crit)
-        U = Unew
+        U, Unew = Unew, U
         if crit < tol
             converged = true
             break

@@ -40,6 +40,12 @@ smoothing_ldiv_adjoint(S::InvertibleSmoothing, X, nr) = reshape(S.F' \ reshape(X
 apply(::IdentitySmoothing, U) = U
 apply(S::MatrixSmoothing, U) = S.L * U
 
+# In-place application L U → V (no copy for L = I), with its buffer
+smoothing_buffer(::IdentitySmoothing, U) = nothing
+smoothing_buffer(S::MatrixSmoothing, U) = similar(U, size(S.L, 1), size(U, 2))
+apply!(::Nothing, ::IdentitySmoothing, U) = U
+apply!(V, S::MatrixSmoothing, U) = mul!(V, S.L, U)
+
 """
 Regularization assembled for the solvers: global smoothing operator, rows of `L U` belonging
 to each group, and norm terms.

@@ -1,7 +1,6 @@
 # Noise covariance ---------------------------------------------------------------------
 #
-# The noise covariance R is known and diagonal. The data fidelity ‖y - Hu‖²_{R⁻¹} is handled
-# once for all by whitening: H ← R^{-1/2} H, y ← R^{-1/2} y.
+# The noise covariance R is known and diagonal. The data fidelity ‖y - Hu‖²_{R⁻¹} is handled once for all by whitening: H ← R^{-1/2} H, y ← R^{-1/2} y.
 """
     noise_variances(R, y)
 
@@ -9,14 +8,11 @@ Diagonal of the known noise covariance `R`, with the layout of the data.
 
 **Inputs**
 - `R` - `Nothing`, `UniformScaling`, `Diagonal`, `AbstractVector{<:Real}` or
-  `AbstractMatrix{<:Real}`: noise covariance — not provided, `σ²I`, `Diagonal`, vector of
-  variances (`length(y)`), matrix of variances (size of `y`) or diagonal
-  `length(y) × length(y)` matrix
+  `AbstractMatrix{<:Real}`: noise covariance — not provided, `σ²I`, `Diagonal`, vector of variances (`length(y)`), matrix of variances (size of `y`) or diagonal `length(y) × length(y)` matrix
 - `y` - `AbstractVecOrMat`: measured data
 
 **Outputs**
-- `σ2` - `Array{<:Real}` or `Nothing`: noise variances with the layout of `y`, `nothing`
-  when `R` is not provided or is `I`
+- `σ2` - `Array{<:Real}` or `Nothing`: noise variances with the layout of `y`, `nothing` when `R` is not provided or is `I`
 """
 noise_variances(::Nothing, y) = nothing   # R not provided: R = I
 noise_variances(R::UniformScaling, y) =

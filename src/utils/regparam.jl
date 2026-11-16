@@ -41,8 +41,7 @@ filter_factors(γ, ℓ) = @. γ^2 / (γ^2 + ℓ^2)
 """
     select_parameter(rule, s::NamedTuple, m)
 
-Minimization of the criterion of `rule` w.r.t. `t = log ℓ`: grid search on `lambda_grid`,
-then refinement by Brent's method ([`grid_minimize`](@ref)).
+Minimization of the criterion of `rule` w.r.t. `t = log ℓ`: grid search on `lambda_grid`, then refinement by Brent's method ([`grid_minimize`](@ref)).
 
 **Inputs**
 - `rule` - `LCurve`, `GCV` or `BayesEstimator`: parameter choice rule
@@ -138,10 +137,7 @@ end
 """
     select_parameter(::Heuristic, cache, L, W)
 
-Heuristic initial parameter (Aucejo & De Smet, MSSP 2017): median of a geometric grid
-spanning the admissible range of the squared (generalized) singular values, i.e. their
-geometric mean. When the problem is rank deficient, the lower bound is `16 eps` times the
-upper one.
+Heuristic initial parameter (Aucejo & De Smet, MSSP 2017): median of a geometric grid spanning the admissible range of the squared (generalized) singular values, i.e. their geometric mean. When the problem is rank deficient, the lower bound is `16 eps` times the upper one.
 
 **Inputs**
 - `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem

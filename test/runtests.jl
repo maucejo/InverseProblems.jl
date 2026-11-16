@@ -175,6 +175,8 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test norm(s.u - u) / norm(u) < 0.1
         # real model: τn estimates 1/σ²
         @test 0.1 < s.hyper.τn * σ^2 < 3
+        # λ_g = τs_g / τn (MAP ½‖r‖² + (λ/q)‖u‖_q^q in the real case)
+        @test s.λ ≈ s.hyper.τs ./ s.hyper.τn
     end
 
     @testset "Space–frequency mixed norm" begin
@@ -338,6 +340,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test solve(prob, Bayesian(Lq(1.0)); R = σ2 * I).hyper.τn == 1
         @test solve(prob, Bayesian(Lq(1.0); τn = Estimated()); R = σ2 * I).hyper.τn != 1
         @test sf.hyper.q == [1.0]
+        @test sf.λ ≈ sf.hyper.τs ./ sf.hyper.τn          # complex: ‖r‖² + λ‖u‖_q^q
         @test argmax(abs.(sf.u)) == 17
     end
 end

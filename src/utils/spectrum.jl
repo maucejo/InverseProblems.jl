@@ -1,10 +1,8 @@
 # Spectral data of the standard-form problem ---------------------------------------
-
 """
     spectrum(cache, L, W)
 
-Spectral description of `min ‖y - Hu‖² + λ ‖W^{1/2} L u‖²` used by the parameter choice
-rules: SVD of `H W^{-1/2}` when `L = I`, generalized SVD of `(H, W^{1/2} L)` otherwise.
+Spectral description of `min ‖y - Hu‖² + λ ‖W^{1/2} L u‖²` used by the parameter choice rules: SVD of `H W^{-1/2}` when `L = I`, generalized SVD of `(H, W^{1/2} L)` otherwise.
 
 **Inputs**
 - `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
@@ -36,6 +34,5 @@ end
 
 function spectrum(c::BlockCache, S::SmoothingOperator, W::AbstractMatrix{<:Real})
     parts = [spectrum(c.blocks[j], S, view(W, :, j:j)) for j in 1:c.ns]
-    return (γ = reduce(vcat, [p.γ for p in parts]), β2 = reduce(vcat, [p.β2 for p in parts]),
-            δ0 = sum(p.δ0 for p in parts), nfree = sum(p.nfree for p in parts))
+    return (γ = reduce(vcat, [p.γ for p in parts]), β2 = reduce(vcat, [p.β2 for p in parts]), δ0 = sum(p.δ0 for p in parts), nfree = sum(p.nfree for p in parts))
 end

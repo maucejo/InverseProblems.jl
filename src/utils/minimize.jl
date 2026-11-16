@@ -6,8 +6,7 @@
 """
     brent(f, a, b; rtol = sqrt(eps()), atol = 1e-12, maxiter = 100)
 
-Local minimum of `f` on `[a, b]` by Brent's method (golden-section search with parabolic
-interpolation, no derivative).
+Local minimum of `f` on `[a, b]` by Brent's method (golden-section search with parabolic interpolation, no derivative).
 
 **Inputs**
 - `f` - `Function`: function of one real variable
@@ -68,9 +67,7 @@ end
 """
     grid_minimize(f, grid)
 
-Global minimum of `f` over a grid, refined by [`brent`](@ref) between the neighbours of the
-best grid point. The refined point is kept only if it improves on the grid. `NaN` values are
-treated as `+Inf`.
+Global minimum of `f` over a grid, refined by [`brent`](@ref) between the neighbours of the best grid point. The refined point is kept only if it improves on the grid. `NaN` values are treated as `+Inf`.
 
 **Inputs**
 - `f` - `Function`: function of one real variable

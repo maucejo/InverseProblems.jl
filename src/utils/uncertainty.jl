@@ -3,8 +3,7 @@
 """
     posterior_std(sol)
 
-Posterior standard deviation of each entry of the solution, from the diagonal of the
-posterior covariance.
+Posterior standard deviation of each entry of the solution, from the diagonal of the posterior covariance.
 
 **Inputs**
 - `sol` - `InverseSolution`: solution obtained with `solve(...; covariance = true)`
@@ -23,13 +22,11 @@ marginal_std(Σ::AbstractVector{<:AbstractMatrix}, u) =
 """
     posterior_samples(sol, nsamples = 10_000; rng = Random.default_rng())
 
-Samples of the Gaussian approximation of the posterior `N(μ, Σ)` (circular complex normal
-for complex unknowns), with `μ = sol.u`:
+Samples of the Gaussian approximation of the posterior `N(μ, Σ)` (circular complex normal for complex unknowns), with `μ = sol.u`:
 
     u_sample = μ + S z,   Σ = S Sᴴ (Cholesky),   z ~ randn(eltype(μ))
 
-For block-diagonal operators, each sample (frequency) is drawn from its own `nr × nr`
-covariance.
+For block-diagonal operators, each sample (frequency) is drawn from its own `nr × nr` covariance.
 
 **Inputs**
 - `sol` - `InverseSolution`: solution obtained with `solve(...; covariance = true)`
@@ -68,10 +65,7 @@ end
 """
     credible_interval(sol; level = 0.95, nsamples = 10_000, rng = Random.default_rng())
 
-Bayesian credible interval of each entry of the solution, estimated by sampling the posterior
-([`posterior_samples`](@ref)): empirical quantiles `(1 - level)/2` and `(1 + level)/2` of the
-samples, entry by entry. For complex unknowns, the quantiles are computed separately on the
-real and imaginary parts.
+Bayesian credible interval of each entry of the solution, estimated by sampling the posterior ([`posterior_samples`](@ref)): empirical quantiles `(1 - level)/2` and `(1 + level)/2` of the samples, entry by entry. For complex unknowns, the quantiles are computed separately on the real and imaginary parts.
 
 **Inputs**
 - `sol` - `InverseSolution`: solution obtained with `solve(...; covariance = true)`
@@ -80,8 +74,7 @@ real and imaginary parts.
 - `rng` - `AbstractRNG`: random number generator
 
 **Outputs**
-- `lower` - `Array`: lower bounds, with the layout of `sol.u` (complex for complex unknowns:
-  `real(lower) ≤ real(u)`, `imag(lower) ≤ imag(u)`)
+- `lower` - `Array`: lower bounds, with the layout of `sol.u` (complex for complex unknowns: `real(lower) ≤ real(u)`, `imag(lower) ≤ imag(u)`)
 - `upper` - `Array`: upper bounds, with the layout of `sol.u`
 """
 function credible_interval(sol::InverseSolution; level = 0.95, nsamples::Integer = 10_000,

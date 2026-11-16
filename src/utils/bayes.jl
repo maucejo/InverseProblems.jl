@@ -8,8 +8,11 @@
 #   prior (per comp.) q^{1-1/q} τs^{1/q} / (2Γ(1/q)) exp(-τs|v|^q/q)  q τs^{2/q} / (2πΓ(2/q)) exp(-τs|v|^q)
 #
 # i.e. exp(-c τn ‖r‖²) and exp(-φ τs |v|^q) with c = 1/2, φ = 1/q (real) and c = φ = 1
-# (complex); for q = 2, both priors are normal laws of precision τs. The MAP u-step is
-#     ‖r‖² + Σ_g λ_g ‖v_g‖_q^q,   λ_g = φ_g τs_g / (c τn).
+# (complex); for q = 2, both priors are normal laws of precision τs. With λ_g = τs_g / τn,
+# the MAP in u is
+#     real:    ½‖r‖² + Σ_g (λ_g/q_g) ‖v_g‖_q^q
+#     complex:  ‖r‖² + Σ_g  λ_g      ‖v_g‖_q^q
+# i.e. ‖r‖² + Σ_g λu_g ‖v_g‖_q^q with λu_g = φ_g τs_g / (c τn) (= 2λ_g/q_g real, λ_g complex).
 
 """Field of the data, selecting the real or complex Bayesian model."""
 abstract type Field end
@@ -141,6 +144,12 @@ Mode of the full conditional of the precision of each component of `V`, for a Ga
   (`1/(|vᵢ|² + 2b)` real, `a/(|vᵢ|² + b)` complex)
 """
 function elementwise_precision(F::Field, V)
+    return elementwise_precision!(similar(V, real(eltype(V))), F, V)
+end
+
+# In-place version: τ .= (k/2 + a - 1) / (φ |v|² + b)
+function elementwise_precision!(τ, F::Field, V)
     k, φ = prior_dimension(F), prior_factor(F, 2.0)
-    return @. (k / 2 + HYPER_A - 1) / (φ * abs2(V) + HYPER_B)
+    @. τ = (k / 2 + HYPER_A - 1) / (φ * abs2(V) + HYPER_B)
+    return τ
 end

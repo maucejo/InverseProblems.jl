@@ -3,9 +3,7 @@
 """
     LinearOperator
 
-Internal representation of the forward operator `H`. The layout of the unknown is
-always a matrix `U` of size `nr × ns`: rows are reconstruction points (space),
-columns are samples (frequencies or time steps). A single-snapshot problem has `ns = 1`.
+Internal representation of the forward operator `H`. The layout of the unknown is always a matrix `U` of size `nr × ns`: rows are reconstruction points (space), columns are samples (frequencies or time steps). A single-snapshot problem has `ns = 1`.
 """
 abstract type LinearOperator end
 
@@ -19,8 +17,7 @@ struct DenseOperator{M<:AbstractMatrix} <: LinearOperator
 end
 
 """
-Block-diagonal operator: `H[j]` maps `U[:, j]` to `y[:, j]` (space–frequency problems).
-The block structure is exploited: every frequency is solved independently.
+Block-diagonal operator: `H[j]` maps `U[:, j]` to `y[:, j]` (space–frequency problems). The block structure is exploited: every frequency is solved independently.
 """
 struct BlockDiagonalOperator{M<:AbstractMatrix} <: LinearOperator
     blocks::Vector{M}
@@ -34,8 +31,7 @@ unknown_size(op::BlockDiagonalOperator) = (size(first(op.blocks), 2), length(op.
 """
     InverseProblem(H, y)
 
-Linear inverse problem `y = H u + n`. The layout of the unknown depends on the types of `H`
-and `y`:
+Linear inverse problem `y = H u + n`. The layout of the unknown depends on the types of `H` and `y`:
 
 | `H`                                   | `y`                 | unknown `u`             | use case        |
 |:--------------------------------------|:--------------------|:------------------------|:----------------|
@@ -44,12 +40,10 @@ and `y`:
 | `AbstractArray{T,3}` (`nm × nr × nf`) | `AbstractMatrix` (`nm × nf`) | matrix `nr × nf` | space–frequency |
 | `AbstractMatrix` (`nm·nt × nr·nt`)    | `AbstractMatrix` (`nm × nt`) | matrix `nr × nt` | space–time      |
 
-Rows of the unknown always correspond to reconstruction points, so that [`Groups`](@ref),
-smoothing operators and mixed norms [`Lpq`](@ref) have the same meaning whatever the domain.
+Rows of the unknown always correspond to reconstruction points, so that [`Groups`](@ref), smoothing operators and mixed norms [`Lpq`](@ref) have the same meaning whatever the domain.
 
 **Inputs**
-- `H` - `AbstractMatrix`, `AbstractVector{<:AbstractMatrix}` or `AbstractArray{T,3}`: forward
-  operator (transfer functions or convolution matrix)
+- `H` - `AbstractMatrix`, `AbstractVector{<:AbstractMatrix}` or `AbstractArray{T,3}`: forward operator (transfer functions or convolution matrix)
 - `y` - `AbstractVector` or `AbstractMatrix`: measured data
 
 **Outputs**
@@ -86,8 +80,7 @@ function InverseProblem(H::AbstractVector{<:AbstractMatrix}, y::AbstractMatrix)
     return InverseProblem(BlockDiagonalOperator(collect(H)), y)
 end
 
-InverseProblem(H::AbstractArray{<:Any,3}, y::AbstractMatrix) =
-    InverseProblem([H[:, :, j] for j in axes(H, 3)], y)
+InverseProblem(H::AbstractArray{<:Any,3}, y::AbstractMatrix) = InverseProblem([H[:, :, j] for j in axes(H, 3)], y)
 
 unknown_size(prob::InverseProblem) = unknown_size(prob.H)
 

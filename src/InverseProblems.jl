@@ -25,7 +25,7 @@ module InverseProblems
 
 using LinearAlgebra
 using Random: Random, AbstractRNG
-using SparseArrays: sparse, findnz
+using SparseArrays: SparseMatrixCSC, sparse, findnz, rowvals, nonzeros, nzrange
 using Statistics: quantile
 using SpecialFunctions: loggamma
 

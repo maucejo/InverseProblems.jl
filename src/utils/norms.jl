@@ -41,8 +41,7 @@ penalty(R::Regularization, V) =
 """
     damping(V, level = 0.05)
 
-Damping parameter `ε` avoiding infinite IR weights: a fraction `level` of the values of
-`|V|` are less than or equal to `ε` (cumulative histogram rule used throughout the papers).
+Damping parameter `ε` avoiding infinite IR weights: a fraction `level` of the values of `|V|` are less than or equal to `ε` (cumulative histogram rule used throughout the papers).
 
 **Inputs**
 - `V` - `AbstractArray`: argument `L U` of the regularization term (initial solution)
@@ -61,9 +60,7 @@ dampings(R::Regularization, V) = [damping(view(V, rows, :)) for rows in R.rows]
 
 # Weights -------------------------------------------------------------------------------
 #
-# `reweight!(W, term, V, ε)` fills W (same size as V = L_g U_g) with the weights given by
-# the first-order optimality condition, ∂R/∂v̄ = W ⊙ v, and returns R(V).
-
+# `reweight!(W, term, V, ε)` fills W (same size as V = L_g U_g) with the weights given by the first-order optimality condition, ∂R/∂v̄ = W ⊙ v, and returns R(V).
 function reweight!(W, t::Lq, V, ε)
     q = t.q
     @. W = (q / 2) * max(ε, abs(V))^(q - 2)

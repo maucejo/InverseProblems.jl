@@ -17,14 +17,11 @@ Additive regularization
 
     û = argmin ‖y - Hu‖²_{R⁻¹} + Σ_g λ_g R_g(L_g u_g)
 
-`Lq(2.0)` gives the Tikhonov regularization, `Lq(1.0)` the LASSO, [`Groups`](@ref) the
-group generalized Tikhonov regularization.
+`Lq(2.0)` gives the Tikhonov regularization, `Lq(1.0)` the LASSO, [`Groups`](@ref) the group generalized Tikhonov regularization.
 
 **Inputs**
 - `prior` - `RegularizationTerm`: regularization term (`Lq`, `Lpq` or `Groups`)
-- `λ` - `Real`, `AbstractVector{<:Real}` or `ParameterChoice`: fixed regularization
-  parameter, one parameter per group (multi-parameter regularization), or rule selecting it
-  at each iteration (`LCurve()`, `GCV()`, `BayesEstimator()`)
+- `λ` - `Real`, `AbstractVector{<:Real}` or `ParameterChoice`: fixed regularization   parameter, one parameter per group (multi-parameter regularization), or rule selecting it at each iteration (`LCurve()`, `GCV()`, `BayesEstimator()`)
 
 **Outputs**
 - `f` - `Additive`: formulation, to be passed to [`solve`](@ref)
@@ -46,7 +43,9 @@ check_lambda(λ::AbstractVector{<:Real}) = all(>(0), λ) || throw(ArgumentError(
 
 # Multiplicative ------------------------------------------------------------------
 
-"""Combination of local regularization terms in the multiplicative formulation."""
+"""
+Combination of local regularization terms in the multiplicative formulation.
+"""
 abstract type Coupling end
 struct SumCoupling <: Coupling end      # ordinary multiplicative regularization
 struct ProductCoupling <: Coupling end  # multi-parameter multiplicative regularization
@@ -57,8 +56,7 @@ struct ProductCoupling <: Coupling end  # multi-parameter multiplicative regular
 Multiplicative regularization — no regularization parameter to tune beforehand:
 
 * ordinary multiplicative regularization (OMR): `û = argmin ‖y - Hu‖² · Σ_g R_g(L_g u_g)`
-* multi-parameter multiplicative regularization (MPMR): `û = argmin ‖y - Hu‖² · Π_g R_g(L_g u_g)`,
-  which yields one adaptive regularization parameter per group.
+* multi-parameter multiplicative regularization (MPMR): `û = argmin ‖y - Hu‖² · Π_g R_g(L_g u_g)`, which yields one adaptive regularization parameter per group.
 
 **Inputs**
 - `prior` - `RegularizationTerm`: regularization term (`Lq`, `Lpq` or `Groups`)
@@ -80,39 +78,30 @@ Multiplicative(prior::RegularizationTerm; multiparameter::Bool = false) =
 """
     Estimated()
 
-Marks a hyperparameter of the [`Bayesian`](@ref) formulation as optimized jointly with the
-solution (MAP of its full conditional distribution).
+Marks a hyperparameter of the [`Bayesian`](@ref) formulation as optimized jointly with the solution (MAP of its full conditional distribution).
 """
 struct Estimated end
 
 """
     Fixed()
 
-Keeps the shape parameters `q_g` of the [`Bayesian`](@ref) formulation at the values given
-in the prior (`Lq(q_g)`).
+Keeps the shape parameters `q_g` of the [`Bayesian`](@ref) formulation at the values given in the prior (`Lq(q_g)`).
 """
 struct Fixed end
 
 """
     Bayesian(prior; τn = default, τs = Estimated(), q = Estimated(), shape_bounds = (0.05, 2.0))
 
-Hierarchical Bayesian formulation: normal likelihood of covariance `R/τn` (`R`: noise
-covariance given to [`solve`](@ref)) and, for each group, a generalized Gaussian prior on
-`L_g u_g` with shape `q_g` and precision `τs_g`:
+Hierarchical Bayesian formulation: normal likelihood of covariance `R/τn` (`R`: noise covariance given to [`solve`](@ref)) and, for each group, a generalized Gaussian prior on `L_g u_g` with shape `q_g` and precision `τs_g`:
 
     p(u, τn, τs, q | y) ∝ p(y | u, τn) Π_g p(L_g u_g | τs_g, q_g) p(τs_g) p(q_g) p(τn)
 
-Each hyperparameter is either optimized (`Estimated()`) or fixed. Real and complex data lead
-to different distributions (real or circular complex normal and generalized Gaussian laws).
-Weakly informative Gamma hyperpriors are used for the estimated hyperparameters.
+Each hyperparameter is either optimized (`Estimated()`) or fixed. Real and complex data lead to different distributions (real or circular complex normal and generalized Gaussian laws). Weakly informative Gamma hyperpriors are used for the estimated hyperparameters.
 
 **Inputs**
-- `prior` - `RegularizationTerm`: `Lq` terms (possibly in `Groups`) giving the initial
-  shapes `q_g` and the smoothing operators
-- `τn` - `Real` or `Estimated`: noise precision. `τn = 1` means that `R` is the exact noise
-  covariance. By default, `τn = 1` when `R` is given to `solve`, estimated otherwise
-- `τs` - `Estimated`, `Real` or `AbstractVector{<:Real}`: signal precisions (one value for
-  all groups or one per group)
+- `prior` - `RegularizationTerm`: `Lq` terms (possibly in `Groups`) giving the initial shapes `q_g` and the smoothing operators
+- `τn` - `Real` or `Estimated`: noise precision. `τn = 1` means that `R` is the exact noise covariance. By default, `τn = 1` when `R` is given to `solve`, estimated otherwise
+- `τs` - `Estimated`, `Real` or `AbstractVector{<:Real}`: signal precisions (one value for  all groups or one per group)
 - `q` - `Estimated` or `Fixed`: shape parameters estimated, or kept at the values of `prior`
 - `shape_bounds` - `Tuple{Real,Real}`: search interval of the estimated shape parameters
 

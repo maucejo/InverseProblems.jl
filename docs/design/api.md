@@ -79,10 +79,12 @@ sinon (les composantes du noyau de `L` ne sont pas régularisées).
 | `τn` | `(N/2 + a − 1) / (‖r‖²/2 + b)` | `(N + a − 1) / (‖r‖² + b)` |
 | `τs_g` | `(M_g/q_g + a − 1) / (Σ|v|^q/q_g + b)` | `(2M_g/q_g + a − 1) / (Σ|v|^q + b)` |
 | objectif en `q_g` | `M logΓ(1/q) − (M/q) log(τs/q) − (a+M−1) log q + bq + (τs/q)Σ|v|^q` | `M logΓ(2/q) − (2M/q) log τs − (a+M−1) log q + bq + τsΣ|v|^q` |
-| `λ_g` (étape en `u`) | `2 τs_g / (q_g τn)` | `τs_g / τn` |
+| MAP en `u` (`λ_g = τs_g/τn`) | `½‖y − Hu‖²_R + Σ_g (λ_g/q_g)‖L_g u_g‖_q^q` | `‖y − Hu‖²_R + Σ_g λ_g‖L_g u_g‖_q^q` |
 
 Soit, avec les facteurs `exp(−c τn‖r‖²)` et `exp(−φ_g τs_g‖L_g u_g‖_q^q)` : `c = 1/2`,
-`φ_g = 1/q_g` en réel, `c = φ_g = 1` en complexe, et `λ_g = φ_g τs_g / (c τn)`. Pour `q = 2`,
+`φ_g = 1/q_g` en réel, `c = φ_g = 1` en complexe. `sol.λ` contient `λ_g = τs_g/τn` ;
+l'algorithme IR résout le problème équivalent `‖y − Hu‖²_R + Σ_g λu_g‖L_g u_g‖_q^q` avec
+`λu_g = φ_g τs_g / (c τn)` (`= 2λ_g/q_g` en réel, `λ_g` en complexe). Pour `q = 2`,
 les deux lois a priori sont des lois normales (réelle ou complexe) de précision `τs`.
 
 Initialisation : `τn = N / yᴴ(I + H(Lᴴλ0WL)⁻¹Hᴴ)⁻¹y` (identité de Woodbury, valable même
@@ -128,7 +130,7 @@ Bayesian(Lq(2.0); τn = 1.0, τs = 0.5, q = Fixed())      # tout fixé : posteri
   conjointement avec `u` :
 
       τ_i = (k/2 + a − 1) / (φ |v_i|² + b)      (= 1/(|v_i|² + 2b) en réel, a/(|v_i|² + b) en complexe)
-      u   = (Hᴴ H + Lᴴ Λ L)⁻¹ Hᴴ y,   Λ = φ τ / (c τn)
+      u   = (Hᴴ H + Lᴴ Λ L)⁻¹ Hᴴ y,   Λ = φ τ / (c τn) = τ / τn
 
   Initialisation : Tikhonov avec `λ = ‖2 Hᴴ y‖∞` (par fréquence pour l'opérateur
   bloc-diagonal). Seuls les opérateurs de lissage de l'a priori sont utilisés : les termes
@@ -172,6 +174,16 @@ L'inversibilité d'un `L` carré est testée une fois à l'assemblage (factorisa
 `InvertibleSmoothing` / `SingularSmoothing`). Pour l'opérateur bloc-diagonal, chaque fréquence
 suit ce schéma indépendamment ; pour l'espace–temps, `L` agit par blocs (`I ⊗ L`).
 L'initialisation de `τn` utilise également Woodbury : `yᴴ(I + H M⁻¹ Hᴴ)⁻¹y = yᴴ(y − H û)`.
+
+**Allocations.** Un système linéaire (`linear_system` : `DenseSystem`, ou `BlockSystem` avec un système par
+fréquence pour le calcul parallèle) est construit une fois par résolution : il précalcule ce
+qui ne dépend pas des poids (`Hᴴ H`, transposée de l'opérateur de lissage global, forme
+standard `H L⁻¹`) et préalloue la matrice du système, `K D⁻¹`, le second membre, la solution
+et le résidu. Les boucles (IR, MAP, `ElementWise`) utilisent les versions en place
+`weighted_solve!`, `residual_norm2!`, `apply!`, échangent les tampons `U`/`Unew` et calculent
+le critère d'arrêt sans tableau temporaire : une itération n'alloue plus de tableau de la
+taille du problème. Les versions allouantes (`weighted_solve`, `residual_norm2`) restent
+disponibles pour les calculs ponctuels.
 
 ## Organisation du code
 
