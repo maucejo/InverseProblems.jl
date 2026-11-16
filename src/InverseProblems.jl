@@ -52,6 +52,7 @@ export InverseSolution
 include("utils/smoothing.jl") # assembled smoothing operator of the groups
 include("utils/noise.jl")     # noise covariance, whitening
 include("utils/linsolve.jl")  # caches, weighted Tikhonov solves, posterior covariance
+include("utils/minimize.jl")         # 1D minimization: Brent, refined grid search
 include("utils/spectrum.jl")  # SVD / GSVD of the standard-form problem
 include("utils/regparam.jl")  # L-curve, GCV, Bayesian estimator, heuristic
 include("utils/norms.jl")     # norm values, damping, IR weights

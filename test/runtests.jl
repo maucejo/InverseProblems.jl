@@ -94,6 +94,18 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
             @test λ1 > 0
             @test isapprox(λ1, λ2; rtol = 1e-6)
         end
+        # 1D refinement: Brent's method, and refined grid search better than the grid alone
+        x, fx = InverseProblems.brent(x -> (x - 0.3)^2 + 1, -2, 3)
+        @test x ≈ 0.3 atol = 1e-7
+        @test fx ≈ 1
+        @test InverseProblems.grid_minimize(x -> (x - 0.3)^2 + 1, range(-2, 3; length = 11)) ≈ 0.3 atol = 1e-7
+        sp = InverseProblems.spectrum(c, Lid, W)
+        t = sort(log.(InverseProblems.lambda_grid(sp.γ)))
+        for rule in (LCurve(), GCV(), BayesEstimator())
+            J = InverseProblems.criterion(rule, sp, length(y))
+            λ = InverseProblems.select_parameter(rule, sp, length(y))
+            @test J(log(λ) / 2) <= minimum(J.(t))
+        end
         s = solve(InverseProblem(H, y), Additive(Lq(2.0); λ = BayesEstimator()))
         @test s.λ > 0 && s.converged
         # non-square L: the null space of L is left unregularized

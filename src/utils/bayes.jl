@@ -51,23 +51,13 @@ function shape_objective(q, τ, logabs, M, k)
 end
 
 """
-Optimal shape parameter in `[lb, ub]` (brute-force search followed by a local refinement).
+Optimal shape parameter in `[lb, ub]` (grid search refined by Brent's method).
 """
 function optimal_shape(F::Field, v, τ, (lb, ub); npoints = 200)
     k = prior_dimension(F)
     logabs = [log(abs(x)) for x in v if !iszero(x)]
     M = length(v)
-    obj(q) = shape_objective(q, τ, logabs, M, k)
-    grid = range(lb, ub; length = npoints)
-    i = argmin(obj.(grid))
-    # golden-section refinement on the neighbouring cells
-    a, b = grid[max(i - 1, 1)], grid[min(i + 1, npoints)]
-    φ = (sqrt(5) - 1) / 2
-    for _ in 1:40
-        x1, x2 = b - φ * (b - a), a + φ * (b - a)
-        obj(x1) < obj(x2) ? (b = x2) : (a = x1)
-    end
-    return (a + b) / 2
+    return grid_minimize(q -> shape_objective(q, τ, logabs, M, k), range(lb, ub; length = npoints))
 end
 
 """Mode of the full conditional of the precision of a group (`M` components)."""

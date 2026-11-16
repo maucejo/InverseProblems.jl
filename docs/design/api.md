@@ -141,6 +141,7 @@ src/
 │   ├── smoothing.jl        # assemblage des L_g en opérateur de lissage global
 │   ├── noise.jl            # covariance du bruit R, blanchiment des données
 │   ├── linsolve.jl         # caches, résolutions de Tikhonov pondérées, covariance a posteriori
+│   ├── minimize.jl         # minimisation 1D : Brent, recherche sur grille raffinée
 │   ├── spectrum.jl         # SVD / GSVD du problème sous forme standard
 │   ├── regparam.jl         # L-curve, GCV, estimateur bayésien, heuristique
 │   ├── norms.jl            # valeurs des normes, paramètre d'amortissement ε, poids IR
