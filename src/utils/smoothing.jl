@@ -60,11 +60,16 @@ end
 ngroups(R::Regularization) = length(R.terms)
 with_terms(R::Regularization, terms) = Regularization(R.L, R.rows, terms, R.nout)
 
-is_identity(L::UniformScaling) = isone(L.λ)
-is_identity(::AbstractMatrix) = false
+# The identity is detected from the type of the operators (`L = I`, the default of the terms),
+# so that the type of the assembled regularization is inferred from the type of the terms.
+# Any other operator (`2I`, `1.0I`, matrix) goes through the general path.
+is_identity(::UniformScaling{Bool}) = true
+is_identity(::Any) = false
+all_identity(::Tuple{}) = true
+all_identity(terms::Tuple) = is_identity(first(terms).L) && all_identity(Base.tail(terms))
 
 function Regularization(G::Groups, nr::Integer)
-    all(t -> is_identity(t.L), G.terms) &&
+    all_identity(G.terms) &&
         return Regularization(IdentitySmoothing(), G.rows, G.terms, nr)
 
     T = mapreduce(t -> eltype(t.L isa UniformScaling ? t.L.λ : t.L), promote_type, G.terms;

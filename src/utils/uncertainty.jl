@@ -82,14 +82,22 @@ function credible_interval(sol::InverseSolution; level = 0.95, nsamples::Integer
     0 < level < 1 || throw(ArgumentError("level must be in ]0, 1["))
     X = posterior_samples(sol, nsamples; rng)
     p = ((1 - level) / 2, (1 + level) / 2)
-    d = ndims(X)
-    bounds = map(eachslice(X; dims = ntuple(identity, d - 1))) do x
-        sample_quantiles(x, p)
+    # last dimension of X = samples; the other ones have the layout of sol.u
+    lower = similar(X, axes(X)[1:end-1])
+    upper = similar(lower)
+    for I in CartesianIndices(lower)
+        lower[I], upper[I] = sample_quantiles(view(X, I, :), p)
     end
-    return first.(bounds), last.(bounds)
+    return output_layout(sol.u, lower), output_layout(sol.u, upper)
 end
 
-sample_quantiles(x::AbstractVector{<:Real}, p) = Tuple(quantile(x, collect(p)))
+output_layout(::AbstractVector, B) = vec(B)
+output_layout(::AbstractMatrix, B) = B
+
+function sample_quantiles(x::AbstractVector{<:Real}, p)
+    q = quantile(x, collect(p))
+    return (q[1], q[2])   # explicit 2-tuple: Tuple(q) has a length unknown to inference
+end
 
 function sample_quantiles(x::AbstractVector{<:Complex}, p)
     re, im_ = quantile(real(x), collect(p)), quantile(imag(x), collect(p))

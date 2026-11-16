@@ -35,3 +35,12 @@ struct BayesEstimator <: ParameterChoice end
 Heuristic initial value of the regularization parameter (Aucejo & De Smet, MSSP 2017): the geometric mean of the extreme admissible values derived from the (generalized) singular values of `(H, L)`. Only used to initialize iterative algorithms (`init` keyword).
 """
 struct Heuristic <: ParameterChoice end
+
+"""
+    LambdaMax()
+
+Initial regularization parameter `λ = ‖2 Hᴴ y‖∞` (whitened `H` and `y`): the smallest value
+for which the ℓ1-regularized solution is zero (Kim et al., IEEE 2007). Only used to
+initialize iterative algorithms (`init` keyword); default initialization of `ElementWise()`.
+"""
+struct LambdaMax <: ParameterChoice end

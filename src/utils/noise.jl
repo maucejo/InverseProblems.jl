@@ -8,7 +8,12 @@ Diagonal of the known noise covariance `R`, with the layout of the data.
 
 **Inputs**
 - `R` - `Nothing`, `UniformScaling`, `Diagonal`, `AbstractVector{<:Real}` or
-  `AbstractMatrix{<:Real}`: noise covariance — not provided, `σ²I`, `Diagonal`, vector of variances (`length(y)`), matrix of variances (size of `y`) or diagonal `length(y) × length(y)` matrix
+  `AbstractMatrix{<:Real}`: noise covariance — not provided, `σ²I`, variances of all the
+  data (vector of length `length(y)`, matrix of the size of `y`, or diagonal matrix
+  `length(y) × length(y)`), or, for matrix data `y` (`nm × ns`), variances of the `nm`
+  measurement points common to all the samples (vector of length `nm`, `Diagonal` or diagonal
+  matrix `nm × nm`). A matrix of the size of `y` is always read as the variances of all the
+  data (use a vector or a `Diagonal` for per-point variances when `nm = ns`)
 - `y` - `AbstractVecOrMat`: measured data
 
 **Outputs**
@@ -20,14 +25,15 @@ noise_variances(R::UniformScaling, y) =
 noise_variances(R::Diagonal, y) = noise_variances(R.diag, y)
 
 function noise_variances(R::AbstractVector{<:Real}, y)
-    length(R) == length(y) ||
-        throw(DimensionMismatch("$(length(R)) noise variances for $(length(y)) data"))
-    return check_variances(reshape(float.(collect(R)), size(y)))
+    length(R) == length(y) && return check_variances(reshape(float.(collect(R)), size(y)))
+    y isa AbstractMatrix && length(R) == size(y, 1) &&             # per measurement point
+        return check_variances(repeat(float.(collect(R)), 1, size(y, 2)))
+    throw(DimensionMismatch("$(length(R)) noise variances for $(length(y)) data"))
 end
 
 function noise_variances(R::AbstractMatrix{<:Real}, y)
     y isa AbstractMatrix && size(R) == size(y) && return check_variances(float.(R))
-    size(R) == (length(y), length(y)) ||
+    (size(R) == (length(y), length(y)) || size(R) == (size(y, 1), size(y, 1))) ||
         throw(DimensionMismatch("noise covariance of size $(size(R)) for $(length(y)) data"))
     isdiag(R) || throw(ArgumentError("the noise covariance R must be diagonal"))
     return noise_variances(diag(R), y)

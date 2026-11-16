@@ -16,9 +16,21 @@ Value of a regularization term.
 """
 penalty(t::Lq, V) = sum(x -> abs(x)^t.q, V)
 
+# Matrix layout (space × samples) of L u for a mixed norm: as is for a matrix unknown,
+# reshaped column-major for a vectorized problem (`samples` columns)
+mixed_layout(::Lpq{<:Any,<:Any,Nothing}, V) =
+    size(V, 2) > 1 ? V :
+    throw(ArgumentError("mixed norm on a single column: for a vectorized problem, give the number of samples (`Lpq(p, q; samples = ns)`)"))
+function mixed_layout(t::Lpq{<:Any,<:Any,Int}, V)
+    size(V, 2) == t.samples && return V
+    size(V, 2) == 1 ||
+        throw(DimensionMismatch("L u has $(size(V, 2)) columns, expected 1 (vectorized problem) or $(t.samples)"))
+    return reshape(V, :, t.samples)
+end
+
 function penalty(t::Lpq, V::AbstractMatrix)
     p, q = t.p, t.q
-    return sum(eachrow(V)) do row
+    return sum(eachrow(mixed_layout(t, V))) do row
         sum(x -> abs(x)^p, row)^(q / p)
     end
 end
@@ -69,10 +81,11 @@ end
 
 function reweight!(W, t::Lpq, V, ε)
     p, q = t.p, t.q
-    for i in axes(V, 1)
-        row = view(V, i, :)
+    Vm, Wm = mixed_layout(t, V), mixed_layout(t, W)
+    for i in axes(Vm, 1)
+        row = view(Vm, i, :)
         ws = (q / 2) * max(ε^p, sum(x -> abs(x)^p, row))^(q / p - 1)
-        @. W[i, :] = ws * max(ε, abs(row))^(p - 2)
+        @. Wm[i, :] = ws * max(ε, abs(row))^(p - 2)
     end
     return penalty(t, V)
 end

@@ -51,6 +51,66 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test_throws ArgumentError InverseProblems.groups(Groups(1:2 => Lq(1.0)), 3)
     end
 
+    @testset "Finite-difference operators" begin
+        @test fd_weights(1.0, 3, 1) ≈ [-1.5 2 -0.5; -0.5 0 0.5; 0.5 -2 1.5]
+        @test fd_weights(0.5, 3, 2) ≈ fill(4.0, 3) * [1 -2 1]
+        @test_throws ArgumentError fd_weights(1.0, 3, 3)
+        # 1D: one-sided and centered schemes, exact for polynomials of degree < npts
+        @test Matrix(diff_operator(4, 1; npts = 2)) == [-1 1 0 0; 0 -1 1 0; 0 0 -1 1]
+        @test diff_operator(5, 0) == sparse(1.0I, 5, 5)
+        @test_throws ArgumentError diff_operator(5, 1; npts = 4)
+        x = range(0, 2, length = 13)
+        h = step(x)
+        @test diff_operator(13, 1; h) * x .^ 2 ≈ 2x
+        @test diff_operator(13, 2; h) * x .^ 2 ≈ fill(2, 11)            # 3-point: interior points
+        @test diff_operator(13, 1; npts = 5, h) * x .^ 4 ≈ 4x .^ 3
+        @test size(diff_operator(13, 2; npts = 3)) == (11, 13)
+        @test diff_operator(13, 2; npts = 5, h) * x .^ 3 ≈ 6x                 # centered, n × n
+        # 2D structured mesh, points in random order
+        Random.seed!(10)
+        P = shuffle([(xi, yi) for xi in range(0, 0.6, length = 7) for yi in range(0, 0.4, length = 5)])
+        C = [first.(P) last.(P)]
+        f = C[:, 1] .^ 2 .+ 3C[:, 2] .^ 2
+        @test diff_operator(C, 1) * f ≈ 2C[:, 1]
+        @test diff_operator(C, 2) * f ≈ 6C[:, 2]
+        @test diff_operator(C, 2; order = 2) * f ≈ fill(6, 7 * (5 - 2))
+        @test size(diff_operator(C, 1; npts = 2)) == (35 - 5, 35)
+        @test_throws ArgumentError diff_operator([0.0 0; 1 0; 3 0], 1)    # non-uniform spacing
+        # space–frequency / space–time operators of vectorized problems
+        nr, ns = 6, 5
+        Ux = randn(ComplexF64, nr, ns)
+        Ls, Lx = diff_operator(ns, 1; npts = 2), diff_operator(nr, 2)
+        @test space_sample_operator(nr, ns; samples = Ls) * vec(Ux) ≈ vec(Ux * transpose(Ls))
+        @test space_sample_operator(nr, ns; space = Lx) * vec(Ux) ≈ vec(Lx * Ux)
+        @test space_sample_operator(nr, ns; space = Lx, samples = Ls) * vec(Ux) ≈ vec(Lx * Ux * transpose(Ls))
+        @test size(space_sample_operator(nr, ns; samples = Ls)) == ((ns - 1) * nr, ns * nr)
+        @test space_sample_operator(nr, ns) == sparse(1.0I, nr * ns, nr * ns)
+        @test_throws DimensionMismatch space_sample_operator(nr, ns; samples = diff_operator(ns + 1, 1))
+        @test sample_rows([2, 4], nr, ns) == [2, 4, 8, 10, 14, 16, 20, 22, 26, 28]
+        rows = [2, 3, 4]
+        @test space_sample_operator(3, ns; samples = Ls) * vec(Ux)[sample_rows(rows, nr, ns)] ≈
+              vec(Ux[rows, :] * transpose(Ls))
+        # space–frequency operator of MSSP 2018: Lf of Eq. (11), L = (I_N ⊗ Ls)(Lf ⊗ I_M) of
+        # Eq. (15), regularization term ‖L F‖_{p,q}^q of Eq. (14)
+        M, N, Δf = 6, 7, 2.0
+        Lf11 = zeros(N, N); Lf11[1, 1:3] = [-1.5, 2, -0.5]; Lf11[N, N-2:N] = [0.5, -2, 1.5]
+        for j in 2:N-1; Lf11[j, j-1], Lf11[j, j+1] = -0.5, 0.5; end
+        Lsp, Lfr = diff_operator(M, 2), diff_operator(N, 1; h = Δf)
+        @test Matrix(Lfr) ≈ Lf11 ./ Δf
+        L15 = kron(sparse(I, N, N), Lsp) * kron(Lfr, sparse(I, M, M))
+        @test L15 ≈ space_sample_operator(M, N; space = Lsp, samples = Lfr)
+        Fm = randn(ComplexF64, M, N)
+        Ym = Lsp * Fm * transpose(Lfr)
+        @test sum(norm(Ym[i, :], 1.5)^0.7 for i in axes(Ym, 1)) ≈
+              InverseProblems.penalty(Lpq(1.5, 0.7; samples = N), reshape(L15 * vec(Fm), :, 1))
+        # use as smoothing operator of a group
+        H = randn(40, 35)
+        y = H * f
+        L = diff_operator(C, 1)
+        s = solve(InverseProblem(H, y), Additive(Groups(1:35 => Lq(2.0; L)); λ = 1e-3))
+        @test s.u ≈ (H'H + 1e-3 * L'L) \ (H'y)
+    end
+
     @testset "Formulations" begin
         @test_throws ArgumentError Additive(Lq(2.0); λ = -1.0)
         @test_throws ArgumentError Additive(Lq(2.0); λ = Heuristic())
@@ -201,6 +261,96 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test size(lo) == size(U) && all(real(lo) .<= real(s.u) .<= real(up))
     end
 
+    @testset "Operator along the samples Lf (MSSP 2018)" begin
+        IP = InverseProblems
+        Random.seed!(14)
+        nm, nr, nf = 14, 10, 8
+        Hs = [randn(ComplexF64, nm, nr) for _ in 1:nf]
+        U = zeros(ComplexF64, nr, nf); U[4, :] .= 1
+        Y = reduce(hcat, [Hs[j] * U[:, j] for j in 1:nf]) .+ 0.01randn(ComplexF64, nm, nf)
+        Lf = diff_operator(nf, 1)
+        pb, pv = InverseProblem(Hs, Y), InverseProblem(blockdiag(sparse.(Hs)...), vec(Y))
+        @test IP.sample_coupling(Lpq(2, 0.5; Lf)) isa IP.SmoothedSamples
+        @test IP.sample_coupling(Groups(1:5 => Lq(1.0), 6:10 => Lpq(2, 0.5; Lf))) isa IP.SmoothedSamples
+        @test IP.strategy(pb, Multiplicative(Lpq(2, 0.5; Lf))) isa IP.Assembled
+        # native Lf = vectorized problem with L = kron(Lf, I)
+        a = solve(pb, Multiplicative(Lpq(2, 0.5; Lf)); init = 1e-2, covariance = true)
+        b = solve(pv, Multiplicative(Lpq(2, 0.5; L = space_sample_operator(nr, nf; samples = Lf), samples = nf));
+                  init = 1e-2, covariance = true)
+        @test vec(a.u) ≈ b.u && a.λ ≈ b.λ && size(a.u) == (nr, nf)
+        @test a.covariance ≈ b.covariance && size(posterior_std(a)) == (nr, nf)
+        # groups, per-point noise variances
+        r = 0.01 .+ rand(nm)
+        a = solve(pb, Multiplicative(Groups(1:5 => Lpq(2, 0.5; Lf), 6:10 => Lq(1.0))); R = r, init = 1e-2)
+        b = solve(pv, Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lpq(2, 0.5; L = space_sample_operator(5, nf; samples = Lf), samples = nf),
+                                            sample_rows(6:10, nr, nf) => Lq(1.0))); R = repeat(r, nf), init = 1e-2)
+        @test vec(a.u) ≈ b.u
+        # space–time problem (dense convolution matrix), spatial and temporal operators
+        nt = 6
+        Ht, Yt = randn(nm * nt, nr * nt), randn(nm, nt)
+        Lsp, Lt = diff_operator(nr, 2; npts = 5), diff_operator(nt, 1)
+        a = solve(InverseProblem(Ht, Yt), Additive(Lpq(2, 1; L = Lsp, Lf = Lt); λ = 0.1))
+        b = solve(InverseProblem(Ht, vec(Yt)),
+                  Additive(Lpq(2, 1; L = space_sample_operator(nr, nt; space = Lsp, samples = Lt), samples = nt); λ = 0.1))
+        @test vec(a.u) ≈ b.u
+        # errors
+        @test_throws ArgumentError solve(InverseProblem(Hs[1], Y[:, 1]), Multiplicative(Lpq(2, 0.5; Lf)))
+        @test_throws ArgumentError Lpq(2, 0.5; Lf, samples = 3)
+        @test_throws DimensionMismatch solve(pb, Multiplicative(Lpq(2, 0.5; Lf = diff_operator(nf + 1, 1))))
+        @test_throws ArgumentError solve(pv, Multiplicative(Lpq(2, 0.5; Lf)))
+        # sparse heuristic on H L⁻¹ (invertible L) = dense heuristic (generalized SVD)
+        Hov = randn(ComplexF64, 30, 12)
+        S = IP.MatrixSmoothing(sparse(diff_operator(12, 1) + 0.5I))
+        cs = IP.linear_cache(InverseProblem(sparse(Hov), randn(ComplexF64, 30)))
+        cd = IP.linear_cache(InverseProblem(Hov, randn(ComplexF64, 30)))
+        @test IP.select_parameter(Heuristic(), cs, S, ones(12, 1)) ≈ IP.select_parameter(Heuristic(), cd, S, ones(12, 1)) rtol = 1e-3
+    end
+
+    @testset "Multiplicative ℓp,q regularization (port of lpq_reg)" begin
+        IP = InverseProblems
+        # direct port of lpq_reg, with the IR weights and the damping rule of the package
+        function lpq_reg_ref(A, b, p, q, r)
+            S = Diagonal(1 ./ sqrt.(r))
+            A, b = [S * a for a in A], S * b
+            nf = length(A); nb, nx = size(A[1])
+            Af = cat(A...; dims = (1, 2)); bf = b[:]
+            AtA, Atb = Af'Af, Af'bf
+            λ = norm(2Atb, Inf)
+            X0 = (AtA + λ * I) \ Atb
+            ε = IP.damping(X0)
+            W = zeros(nx, nf)
+            X = similar(X0)
+            for _ in 1:50
+                s = IP.reweight!(W, Lpq(p, q), reshape(X0, nx, nf), ε)
+                λ = norm(bf - Af * X0)^2 / s
+                X = (AtA + λ * Diagonal(vec(W))) \ Atb
+                crit = norm(X - X0, 1) / norm(X0, 1)
+                X0 = X
+                crit < 1e-8 && break
+            end
+            P = [inv(A[f]'A[f] + λ * Diagonal(W[:, f])) for f in 1:nf]
+            return reshape(X, nx, nf), P, λ
+        end
+        Random.seed!(13)
+        ωs = range(2000, 9000, length = 5)
+        Hs = [beam_frf(ω) for ω in ωs]
+        U = zeros(ComplexF64, 25, length(ωs)); U[17, :] .= 1
+        Y0 = reduce(hcat, [Hs[j] * U[:, j] for j in eachindex(ωs)])
+        r = (0.05 * maximum(abs, Y0))^2 .* (0.5 .+ rand(size(Y0, 1)))   # one variance per point
+        Y = Y0 .+ sqrt.(r) .* randn(ComplexF64, size(Y0))
+        Xr, Pr, λr = lpq_reg_ref(Hs, Y, 2.0, 0.5, r)
+        s = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)); R = r, init = LambdaMax(),
+                  maxiter = 50, covariance = true)
+        @test s.u ≈ Xr rtol = 1e-8
+        @test s.λ ≈ λr rtol = 1e-8
+        @test all(s.covariance[f] ≈ Pr[f] for f in eachindex(ωs))
+        # per-point variances: vector, Diagonal or diagonal matrix nm × nm
+        for R in (Diagonal(r), Matrix(Diagonal(r)))
+            @test solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)); R, init = LambdaMax(), maxiter = 50).u ≈ s.u
+        end
+        @test_throws ArgumentError Additive(Lq(1.0); λ = LambdaMax())
+    end
+
     @testset "Noise covariance" begin
         Random.seed!(6)
         H, y = randn(15, 10), randn(15)
@@ -284,6 +434,115 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         end
         @test_throws ArgumentError solve(InverseProblem(randn(5, 4), randn(5)), Bayesian(Lq(1.0)), ElementWise())
         @test_throws ArgumentError solve(InverseProblem(randn(5, 4), randn(5)), Bayesian(Lq(2.0); τs = 1.0), ElementWise())
+    end
+
+    @testset "Frequency-by-frequency resolution" begin
+        IP = InverseProblems
+        @test IP.sample_coupling(Lq(1.0)) isa IP.IndependentSamples
+        @test IP.sample_coupling(Lpq(2, 1)) isa IP.CoupledSamples
+        @test IP.sample_coupling(Groups(1:2 => Lq(1.0), 3:4 => Lq(2.0))) isa IP.IndependentSamples
+        @test IP.sample_coupling(Groups(1:2 => Lq(1.0), 3:4 => Lpq(2, 1))) isa IP.CoupledSamples
+        Random.seed!(11)
+        ωs = range(2000, 9000, length = 6)
+        Hs = [beam_frf(ω) for ω in ωs]
+        U = zeros(ComplexF64, 25, length(ωs)); U[17, :] .= 1
+        Y0 = reduce(hcat, [Hs[j] * U[:, j] for j in eachindex(ωs)])
+        σ2 = (0.05 .* abs.(Y0)) .^ 2 .+ 1e-30
+        Y = Y0 .+ sqrt.(σ2) .* randn(ComplexF64, size(Y0))
+        prob = InverseProblem(Hs, Y)
+        loop(f, alg; kw...) = [solve(InverseProblem(Hs[j], Y[:, j]), f, alg; R = σ2[:, j], kw...) for j in eachindex(ωs)]
+        # Lq: one problem per frequency, one adaptive parameter per frequency
+        f = Multiplicative(Lq(0.5))
+        s = solve(prob, f; R = σ2)
+        ref = loop(f, IR())
+        @test s.u ≈ reduce(hcat, [r.u for r in ref])
+        @test s.λ ≈ [r.λ for r in ref] && length(s.λ) == length(ωs)
+        @test s.hyper.iterations == [r.iterations for r in ref]
+        @test s.converged == all(r.converged for r in ref)
+        # MPMR with groups of Lq: one parameter per group and per frequency
+        f = Multiplicative(Groups(1:12 => Lq(1.0), 13:25 => Lq(0.5)); multiparameter = true)
+        @test size(solve(prob, f; R = σ2).λ) == (2, length(ωs))
+        # Bayesian MAP: hyperparameters per frequency, covariance per frequency
+        f = Bayesian(Lq(1.0))
+        s = solve(prob, f; R = σ2, covariance = true)
+        ref = loop(f, MAP(); covariance = true)
+        @test s.u ≈ reduce(hcat, [r.u for r in ref])
+        @test s.hyper.τn == [r.hyper.τn for r in ref]          # = 1: R exact
+        @test size(s.hyper.q) == (1, length(ωs))
+        @test length(s.covariance) == length(ωs) && s.covariance[2] ≈ ref[2].covariance
+        lo, up = credible_interval(s; nsamples = 200)
+        @test size(lo) == size(U)
+        # element-wise Bayesian: exactly one RVR per frequency
+        s = solve(prob, Bayesian(Lq(2.0)), ElementWise(); R = σ2)
+        ref = loop(Bayesian(Lq(2.0)), ElementWise())
+        @test s.u ≈ reduce(hcat, [r.u for r in ref])
+        @test size(s.λ) == size(U) && size(s.hyper.τs) == size(U)
+        # mixed norm: the space–frequency problem is solved as a whole (one parameter)
+        s = solve(prob, Multiplicative(Lpq(2, 0.5)); R = σ2)
+        @test s.λ isa Real && !haskey(s.hyper, :iterations)
+        s = solve(prob, Multiplicative(Groups(1:12 => Lq(1.0), 13:25 => Lpq(2, 0.5))); R = σ2)
+        @test s.λ isa Real
+    end
+
+    @testset "Sparse operators (vectorized space–frequency problems)" begin
+        Random.seed!(12)
+        nm, nr, nf = 12, 10, 8
+        Hs = [randn(ComplexF64, nm, nr) for _ in 1:nf]
+        U = zeros(ComplexF64, nr, nf); U[4, :] .= 1
+        Y = reduce(hcat, [Hs[j] * U[:, j] for j in 1:nf]) .+ 0.01randn(ComplexF64, nm, nf)
+        Hb = blockdiag(sparse.(Hs)...)
+        y = vec(Y)
+        v = rand(length(y)) .+ 0.5
+        ps, pd = InverseProblem(Hb, y), InverseProblem(Matrix(Hb), y)
+        @test ps.H isa InverseProblems.SparseOperator
+        # frequency smoothing L = Lf ⊗ I couples the frequencies
+        Lf = kron(diff_operator(nf, 1), sparse(1.0I, nr, nr))
+        Hd = Matrix(Hb)
+        s = solve(ps, Additive(Lq(2.0; L = Lf); λ = 0.1); R = v, covariance = true)
+        A = Hd' * (Hd ./ v) + 0.1 * Matrix(Lf' * Lf)
+        @test s.u ≈ A \ (Hd' * (y ./ v))
+        @test s.covariance ≈ inv(A)
+        # same results as the dense path
+        for (f, alg, kw) in ((Multiplicative(Lq(0.5)), IR(), (init = 1e-2,)),
+                             (Bayesian(Lq(1.0)), MAP(), (init = 1e-2,)),
+                             (Bayesian(Lq(2.0)), ElementWise(), (;)))
+            a, b = solve(ps, f, alg; kw..., covariance = true), solve(pd, f, alg; kw..., covariance = true)
+            @test a.u ≈ b.u rtol = 1e-8
+            @test a.covariance ≈ b.covariance rtol = 1e-6
+        end
+        # default initializations: heuristic estimate for the OMR and the MAP
+        s = solve(ps, Multiplicative(Lq(0.5)))
+        @test s.λ > 0 && all(argmax(abs.(reshape(s.u, nr, nf)[:, j])) == 4 for j in 1:nf)
+        @test solve(ps, Bayesian(Lq(1.0))).hyper.τn > 0
+        # 2-norm condition number estimate, heuristic consistent with the dense one
+        A = sparse(Hermitian(Matrix(Hb' * Hb) + 0.1I))
+        @test InverseProblems.condest(A) ≈ cond(Matrix(A)) rtol = 1e-3
+        @test InverseProblems.condest(sparse([1.0 1; 1 1])) == Inf
+        Hover = sparse(randn(ComplexF64, 30, 12))
+        cs = InverseProblems.linear_cache(InverseProblem(Hover, randn(ComplexF64, 30)))
+        cd = InverseProblems.linear_cache(InverseProblem(Matrix(Hover), randn(ComplexF64, 30)))
+        W = ones(12, 1)
+        @test InverseProblems.select_parameter(Heuristic(), cs, InverseProblems.IdentitySmoothing(), W) ≈
+              InverseProblems.select_parameter(Heuristic(), cd, InverseProblems.IdentitySmoothing(), W) rtol = 1e-2
+        # mixed norm on the vectorized problem: same model as the space–frequency problem
+        pb = InverseProblem(Hs, Y)
+        a = solve(pb, Multiplicative(Lpq(2, 0.5)); init = 1e-2)
+        b = solve(ps, Multiplicative(Lpq(2, 0.5; samples = nf)); init = 1e-2)
+        @test vec(a.u) ≈ b.u && a.λ ≈ b.λ && a.iterations == b.iterations
+        @test InverseProblems.penalty(Lpq(2, 0.5; samples = nf), reshape(vec(U), :, 1)) ≈
+              InverseProblems.penalty(Lpq(2, 0.5), U)
+        @test_throws ArgumentError solve(ps, Multiplicative(Lpq(2, 0.5)); init = 1e-2)
+        # groups of a vectorized problem, mixed norm combined with a frequency smoothing
+        Ls = diff_operator(nf, 1)
+        f = Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lpq(2, 0.5; samples = nf),
+                                  sample_rows(6:10, nr, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; samples = Ls),
+                                                                   samples = size(Ls, 1))))
+        @test solve(ps, f).converged
+        @test_throws DimensionMismatch solve(ps, Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lq(1.0),
+            sample_rows(6:10, nr, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; samples = Ls), samples = 3))))
+        # SVD-based parameter choice rules are not available
+        @test_throws ArgumentError solve(ps, Additive(Lq(1.0); λ = LCurve()))
+        @test_throws ArgumentError solve(ps, Multiplicative(Lq(1.0)); init = GCV())
     end
 
     @testset "Bayesian hyperparameters and credible intervals" begin

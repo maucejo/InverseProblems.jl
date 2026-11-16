@@ -164,3 +164,20 @@ function extreme_eigenvalues(c::BlockCache, L, W)
     s = [extreme_eigenvalues(c.blocks[j], L, view(W, :, j:j)) for j in 1:c.ns]
     return (min = minimum(x -> x.min, s), max = maximum(x -> x.max, s))
 end
+
+"""
+    lambda_max(cache)
+
+Value `‖2 Hᴴ y‖∞` used by [`LambdaMax`](@ref) and by the element-wise algorithm (computed per sample for a block-diagonal operator).
+
+**Inputs**
+- `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
+
+**Outputs**
+- `λ` - `Real` (dense operator) or `Vector{<:Real}` (block-diagonal operator, one per sample)
+"""
+lambda_max(c::Union{DenseCache,SparseCache}) = norm(2 .* c.Hty, Inf)
+lambda_max(c::BlockCache) = [lambda_max(b) for b in c.blocks]
+
+# LambdaMax(): ‖2 Hᴴ y‖∞ over the whole problem
+select_parameter(::LambdaMax, c, L::SmoothingOperator, W::AbstractMatrix{<:Real}) = maximum(lambda_max(c))

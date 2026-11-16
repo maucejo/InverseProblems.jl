@@ -37,7 +37,8 @@ function Additive(prior::RegularizationTerm; λ = LCurve())
 end
 
 check_lambda(::ParameterChoice) = nothing
-check_lambda(::Heuristic) = throw(ArgumentError("Heuristic() is only an initialization rule (`init` keyword of `solve`)"))
+check_lambda(rule::Union{Heuristic,LambdaMax}) =
+    throw(ArgumentError("$(rule) is only an initialization rule (`init` keyword of `solve`)"))
 check_lambda(λ::Real) = λ > 0 || throw(ArgumentError("λ must be positive"))
 check_lambda(λ::AbstractVector{<:Real}) = all(>(0), λ) || throw(ArgumentError("λ must be positive"))
 

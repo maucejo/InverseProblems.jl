@@ -7,27 +7,14 @@
 #     u   = (Hᴴ H + Lᴴ Λ L)⁻¹ Hᴴ y,   Λ = φ τ / (c τn) = τ / τn
 # (normal equations or Woodbury identity, see `linsolve.jl`).
 
-"""
-    lambda_max(cache)
-
-Initial Tikhonov parameter of the element-wise algorithm, `‖2 Hᴴ y‖∞` (computed per sample for a block-diagonal operator).
-
-**Inputs**
-- `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
-
-**Outputs**
-- `λ` - `Real` (dense operator) or `Vector{<:Real}` (block-diagonal operator, one per sample)
-"""
-lambda_max(c::DenseCache) = norm(2 .* c.Hty, Inf)
-lambda_max(c::BlockCache) = [lambda_max(b) for b in c.blocks]
 
 # Initial weights D (size of L U): one value, or one value per sample (column)
-initial_weights(c::DenseCache, reg, λ::Real) = fill(float(λ), reg.nout, c.ns)
+initial_weights(c::Union{DenseCache,SparseCache}, reg, λ::Real) = fill(float(λ), reg.nout, c.ns)
 initial_weights(c::BlockCache, reg, λ::AbstractVector) = repeat(transpose(float.(λ)), reg.nout, 1)
 initial_weights(c::BlockCache, reg, λ::Real) = fill(float(λ), reg.nout, c.ns)
 
 """
-    solve(prob, f::Bayesian, ElementWise(); R = nothing, covariance = false, tol = 1e-8, maxiter = 200, init = nothing)
+    solve_joint(prob, f::Bayesian, ElementWise(); R = nothing, covariance = false, tol = 1e-8, maxiter = 200, init = nothing)
 
 Element-wise Bayesian regularization (Relevance Vector Regression): MAP of a hierarchical model where each component of `L u` has its own Gaussian prior precision `τ_i`, alternating the updates of the precisions, of `τn` (if `Estimated()`) and of `u`. Only the smoothing operators of `f.prior` are used: the prior is Gaussian (`q = 2`), so all its terms must be `Lq(2.0)`, and the signal precisions must be `Estimated()`.
 
@@ -44,16 +31,20 @@ Element-wise Bayesian regularization (Relevance Vector Regression): MAP of a hie
 **Outputs**
 - `sol` - `InverseSolution`: MAP estimate, element-wise regularization parameters `Λ = τ / τn` (layout of `L u`; MAP `½‖y - Hu‖²_R + ½ Σᵢ Λᵢ |vᵢ|²` for real data, `‖y - Hu‖²_R + Σᵢ Λᵢ |vᵢ|²` for complex data) in `sol.λ`, hyperparameters `(τn, τs)` in `sol.hyper` (`τs`: element-wise precisions), convergence information and, if requested, posterior covariance
 """
-function solve(prob::InverseProblem, f::Bayesian, ::ElementWise; R = nothing,
+function solve_joint(prob::InverseProblem, f::Bayesian, ::ElementWise; R = nothing,
                covariance::Bool = false, tol = 1e-8, maxiter = 200, init = nothing)
     f.τs isa Estimated ||
         throw(ArgumentError("the element-wise algorithm estimates the signal precisions: use τs = Estimated()"))
     c, reg = setup(prob, f.prior, R)
     all(t -> t isa Lq && t.q == 2, reg.terms) ||
         throw(ArgumentError("the element-wise algorithm uses Gaussian priors: all terms must be Lq(2.0)"))
+    return elementwise_solve(prob, c, reg, noise_spec(f.τn, R), covariance, tol, maxiter, init)
+end
+
+# Function barrier (see `ir_solve`)
+function elementwise_solve(prob, c, reg, τnspec, covariance, tol, maxiter, init)
     F = field(eltype(c))
     N = ndata(c)
-    τnspec = noise_spec(f.τn, R)
 
     sys = linear_system(c, reg.L)
     U = Matrix{eltype(c)}(undef, c.nr, c.ns)

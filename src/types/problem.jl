@@ -23,7 +23,22 @@ struct BlockDiagonalOperator{M<:AbstractMatrix} <: LinearOperator
     blocks::Vector{M}
 end
 
+"""
+Sparse operator acting on `vec(U)`, e.g. an assembled (vectorized) space–frequency problem
+whose frequencies are coupled. Solved with sparse Cholesky factorizations.
+"""
+struct SparseOperator{M<:AbstractSparseMatrix} <: LinearOperator
+    H::M
+    nr::Int
+    ns::Int
+end
+
+# Dense or sparse operator acting on vec(U), depending on the storage of H
+vec_operator(H::AbstractMatrix, nr, ns) = DenseOperator(H, nr, ns)
+vec_operator(H::AbstractSparseMatrix, nr, ns) = SparseOperator(H, nr, ns)
+
 unknown_size(op::DenseOperator) = (op.nr, op.ns)
+unknown_size(op::SparseOperator) = (op.nr, op.ns)
 unknown_size(op::BlockDiagonalOperator) = (size(first(op.blocks), 2), length(op.blocks))
 
 # Problem ----------------------------------------------------------------------
@@ -39,6 +54,7 @@ Linear inverse problem `y = H u + n`. The layout of the unknown depends on the t
 | `AbstractVector` of `nm × nr` matrices| `AbstractMatrix` (`nm × nf`) | matrix `nr × nf` | space–frequency |
 | `AbstractArray{T,3}` (`nm × nr × nf`) | `AbstractMatrix` (`nm × nf`) | matrix `nr × nf` | space–frequency |
 | `AbstractMatrix` (`nm·nt × nr·nt`)    | `AbstractMatrix` (`nm × nt`) | matrix `nr × nt` | space–time      |
+| `AbstractSparseMatrix`                | `AbstractVector` or `AbstractMatrix` | as above | assembled problem (e.g. vectorized space–frequency problem with coupled frequencies) |
 
 Rows of the unknown always correspond to reconstruction points, so that [`Groups`](@ref), smoothing operators and mixed norms [`Lpq`](@ref) have the same meaning whatever the domain.
 
@@ -57,7 +73,7 @@ end
 function InverseProblem(H::AbstractMatrix, y::AbstractVector)
     size(H, 1) == length(y) ||
         throw(DimensionMismatch("H has $(size(H, 1)) rows but y has length $(length(y))"))
-    return InverseProblem(DenseOperator(H, size(H, 2), 1), y)
+    return InverseProblem(vec_operator(H, size(H, 2), 1), y)
 end
 
 function InverseProblem(H::AbstractMatrix, y::AbstractMatrix)
@@ -66,7 +82,7 @@ function InverseProblem(H::AbstractMatrix, y::AbstractMatrix)
         throw(DimensionMismatch("H has $(size(H, 1)) rows but y has $(length(y)) entries"))
     size(H, 2) % ns == 0 ||
         throw(DimensionMismatch("size(H, 2) = $(size(H, 2)) is not a multiple of the number of samples $ns"))
-    return InverseProblem(DenseOperator(H, size(H, 2) ÷ ns, ns), y)
+    return InverseProblem(vec_operator(H, size(H, 2) ÷ ns, ns), y)
 end
 
 function InverseProblem(H::AbstractVector{<:AbstractMatrix}, y::AbstractMatrix)

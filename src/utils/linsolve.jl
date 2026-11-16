@@ -76,8 +76,20 @@ function linear_cache(prob::InverseProblem{<:BlockDiagonalOperator}, R = nothing
     nr, ns = unknown_size(prob)
     σ2 = noise_variances(R, prob.y)
     column(j) = σ2 === nothing ? nothing : view(σ2, :, j)
-    blocks = [dense_cache(prob.H.blocks[j], view(prob.y, :, j), nr, 1, column(j)) for j in 1:ns]
-    return BlockCache(blocks, nr, ns)
+    block(j) = dense_cache(prob.H.blocks[j], view(prob.y, :, j), nr, 1, column(j))
+    return BlockCache(block_caches(block, block(1), ns), nr, ns)
+end
+
+# All the blocks have the same size, hence the same regime and type: the vector is typed from
+# the first block (function barrier), instead of a comprehension whose element type is only
+# known at run time.
+function block_caches(block, first_block::C, ns) where {C<:DenseCache}
+    blocks = Vector{C}(undef, ns)
+    blocks[1] = first_block
+    for j in 2:ns
+        blocks[j] = block(j)
+    end
+    return blocks
 end
 
 Base.eltype(::DenseCache{T}) where {T} = T

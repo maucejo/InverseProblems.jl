@@ -155,35 +155,40 @@ Setup shared by all solvers: linear cache of the problem whitened by the noise c
 - `reg` - `Regularization`: assembled regularization
 """
 function setup(prob::InverseProblem, prior::RegularizationTerm, R)
+    has_sample_operator(prior) &&
+        throw(ArgumentError("an operator along the samples (Lf) requires a space–frequency or space–time problem " *
+                            "with a matrix of data; for a vectorized problem, use `L = space_sample_operator(…)` and `samples`"))
     c = linear_cache(prob, R)
     reg = Regularization(groups(prior, c.nr), c.nr)
     return c, reg
 end
 
 """
-    solve(prob, formulation[, algorithm]; R = nothing, covariance = false, tol = 1e-4, maxiter = 100, init)
+    solve_joint(prob, f::Union{Additive,Multiplicative}, IR(); R = nothing, covariance = false,
+                tol = 1e-8, maxiter = 100, init)
 
-Solve the inverse problem `prob` with the given regularization `formulation`. When the algorithm is omitted, [`default_algorithm`](@ref) is used.
+IR resolution of the additive and multiplicative formulations, the whole problem being solved
+at once (see [`solve`](@ref) for the keywords).
 
 **Inputs**
 - `prob` - `InverseProblem`: inverse problem
-- `formulation` - `Formulation`: `Additive`, `Multiplicative` or `Bayesian`
-- `algorithm` - `Algorithm`: resolution algorithm (`IR()`, `MAP()`)
-- `R` - `Nothing`, `UniformScaling`, `Diagonal`, `AbstractVector` or `AbstractMatrix`: known diagonal noise covariance — not provided (default, equivalent to `I`), `σ²I`, or the noise variances (vector, or matrix with the layout of `y`). The data fidelity is `‖y - Hu‖²_{R⁻¹}`
-- `covariance` - `Bool`: also compute the posterior covariance of the solution. For the additive and multiplicative formulations, `R` is then taken as the exact noise covariance
-- `tol` - `Real`: tolerance on the relative `ℓ1` variation of `u`
-- `maxiter` - `Integer`: maximum number of iterations
-- `init` - `Real` or `ParameterChoice`: initial Tikhonov solution — initial regularization parameter, or rule selecting it (`Heuristic()`, `LCurve()`, `GCV()`, `BayesEstimator()`)
+- `f` - `Additive` or `Multiplicative`: formulation
+- keywords: see [`solve`](@ref)
 
 **Outputs**
-- `sol` - `InverseSolution`: solution, regularization parameter(s), hyperparameters, convergence information and, if requested, posterior covariance
+- `sol` - `InverseSolution`: solution, regularization parameter(s), convergence information
+  and, if requested, posterior covariance
 """
-solve(prob::InverseProblem, f::Formulation; kwargs...) =
-    solve(prob, f, default_algorithm(f); kwargs...)
-
-function solve(prob::InverseProblem, f::Union{Additive,Multiplicative}, ::IR;
+function solve_joint(prob::InverseProblem, f::Union{Additive,Multiplicative}, ::IR;
                R = nothing, covariance::Bool = false, tol = 1e-8, maxiter = 100, init = default_init(f))
     c, reg = setup(prob, f.prior, R)
+    return ir_solve(prob, f, c, reg, covariance, tol, maxiter, init)
+end
+
+# Function barrier: the types of the cache (regime of the problem) and of the smoothing
+# operator (identity, invertible or not) depend on the values of the data, the solver is
+# compiled for the concrete types.
+function ir_solve(prob, f, c, reg, covariance, tol, maxiter, init)
     sys = linear_system(c, reg.L)
     U0, _ = initial_solution(sys, reg, init)
     ε = dampings(reg, apply(reg.L, U0))

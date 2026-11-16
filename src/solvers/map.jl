@@ -31,7 +31,7 @@ update_noise_precision(::Estimated, F, N, r2) = noise_precision(F, N, r2)
 update_noise_precision(τ::Real, F, N, r2) = float(τ)
 
 """
-    solve(prob, f::Bayesian, MAP(); R = nothing, covariance = false, tol = 1e-4, maxiter = 100, inner_tol = 1e-4, inner_maxiter = 100, init = LCurve())
+    solve_joint(prob, f::Bayesian, MAP(); R = nothing, covariance = false, tol = 1e-4, maxiter = 100, inner_tol = 1e-4, inner_maxiter = 100, init = nothing)
 
 Optimal Bayesian regularization: MAP of the hierarchical model, alternating the updates of `q_g`, `τs_g`, `τn` (those marked `Estimated()`) and of `u` (IR algorithm).
 
@@ -44,7 +44,8 @@ Optimal Bayesian regularization: MAP of the hierarchical model, alternating the 
 - `maxiter` - `Integer`: maximum number of outer iterations
 - `inner_tol` - `Real`: tolerance of the IR algorithm (u-step)
 - `inner_maxiter` - `Integer`: maximum number of IR iterations
-- `init` - `Real` or `ParameterChoice`: rule for the initial single-parameter solution
+- `init` - `Nothing`, `Real` or `ParameterChoice`: rule for the initial single-parameter
+  solution — by default `LCurve()` (heuristic value for a sparse operator)
 
 **Outputs**
 - `sol` - `InverseSolution`: MAP estimate, regularization parameters `λ_g = τs_g/τn` of the
@@ -52,10 +53,23 @@ Optimal Bayesian regularization: MAP of the hierarchical model, alternating the 
   `‖y - Hu‖²_R + Σ_g λ_g ‖L_g u_g‖_q^q` for complex data —, hyperparameters `(τn, τs, q)` in
   `sol.hyper`, convergence information and, if requested, posterior covariance
 """
-function solve(prob::InverseProblem, f::Bayesian, ::MAP; R = nothing, covariance::Bool = false,
+function solve_joint(prob::InverseProblem, f::Bayesian, ::MAP; R = nothing, covariance::Bool = false,
                tol = 1e-4, maxiter = 100, inner_tol = 1e-8, inner_maxiter = 100,
-               init = LCurve())
+               init = nothing)
     c, reg = setup(prob, f.prior, R)
+    return map_solve(prob, f, c, reg, noise_spec(f.τn, R), covariance, tol, maxiter,
+                     inner_tol, inner_maxiter, map_init(init, c, reg))
+end
+
+# Initial single-parameter solution: L-curve by default, heuristic value for sparse operators
+# (no SVD available)
+map_init(::Nothing, c, reg) = LCurve()
+map_init(::Nothing, c::SparseCache, reg) =
+    select_parameter(Heuristic(), c, reg.L, ones(real(eltype(c)), reg.nout, c.ns))
+map_init(init, c, reg) = init
+
+# Function barrier (see `ir_solve`)
+function map_solve(prob, f, c, reg, τnspec, covariance, tol, maxiter, inner_tol, inner_maxiter, init)
     F = field(eltype(c))
     cn = misfit_factor(F)
     q = Float64[shape(t) for t in reg.terms]
@@ -66,9 +80,9 @@ function solve(prob::InverseProblem, f::Bayesian, ::MAP; R = nothing, covariance
     ε = dampings(reg, apply(reg.L, U0))
     st = reweighting(sys, reg, Additive(f.prior, init), U0, ε; tol = inner_tol, maxiter = inner_maxiter)
     U, λ0, D = st.U, st.λ, st.D
-    τnspec = noise_spec(f.τn, R)
-    τn = initial_noise_precision(τnspec, sys, λ0, st.W, N)
-    τs = initial_signal_precision(f.τs, [λ0 * cn * τn / prior_factor(F, qg) for qg in q], ngroups(reg))
+    τn0 = initial_noise_precision(τnspec, sys, λ0, st.W, N)   # not reassigned: no boxing in the closure below
+    τs = initial_signal_precision(f.τs, [λ0 * cn * τn0 / prior_factor(F, qg) for qg in q], ngroups(reg))
+    τn = τn0
     λu = u_step_parameters(F, τs, τn, q)
 
     Vbuf = smoothing_buffer(reg.L, U)
@@ -84,7 +98,7 @@ function solve(prob::InverseProblem, f::Bayesian, ::MAP; R = nothing, covariance
         τn = update_noise_precision(τnspec, F, N, residual_norm2!(sys, U))
         λu = u_step_parameters(F, τs, τn, q)
 
-        regq = with_terms(reg, Tuple(with_shape(t, qg) for (t, qg) in zip(reg.terms, q)))
+        regq = with_terms(reg, with_shapes(reg.terms, q))
         inner = reweighting(sys, regq, Additive(f.prior, λu), U, ε;
                             tol = inner_tol, maxiter = inner_maxiter)
         crit = relative_change(inner.U, U)

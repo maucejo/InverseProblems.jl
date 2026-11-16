@@ -2,6 +2,7 @@
 
 [![Generic badge](https://img.shields.io/badge/Version-0.1.0-cornflowerblue.svg)]()
 [![MIT License](https://img.shields.io/badge/License-MIT-forestgreen)](LICENSE)
+[![DispatchDoctor](https://img.shields.io/badge/%F0%9F%A9%BA_tested_with-DispatchDoctor.jl-blue?labelColor=white)](https://github.com/MilesCranmer/DispatchDoctor.jl)
 
 `InverseProblems.jl` is a Julia package designed to solve regularized linear inverse problems of the form `y = H u + n` in the time and frequency domains. It is primarily intended for force reconstruction and source identification in structural dynamics and acoustics, but it can be used for any linear inverse problem. This package can be used for educational and research purposes. As a teacher, you can use it to illustrate regularization theory and its practical implementation. As a researcher, you can use it to compare regularization strategies on your own data.
 
@@ -14,10 +15,16 @@ The package provides the following features:
 
 ### Problem definition
 
-- **Problem types**
-    - Single frequency problem (matrix `H`, vector `y`)
-    - Space–frequency problem (one FRF matrix per frequency)
-    - Space–time problem (`nm·nt × nr·nt` operator)
+- **Frequency domain**
+    - Single frequency problem (FRF matrix `H`, response vector `y`)
+    - Multi-frequency problem (one FRF matrix per frequency, response matrix `Y`)
+
+- **Time domain**
+    - SISO problem (convolution matrix `H`, response vector `y`)
+    - MIMO problem (block convolution matrix, response matrix `Y`)
+
+- **Generic linear problem**
+    - Any forward matrix `H` and data vector `y`
 
 - **Data**
     - Real and complex data
@@ -47,14 +54,13 @@ The package provides the following features:
     - Generalized Cross Validation (GCV)
     - Bayesian estimator
     - Heuristic (initialization)
-    - Local refinement using Brent's method
 
 ### Resolution algorithms
 
 - **Algorithms**
     - Iteratively reweighted (IR) algorithm
     - Maximum a posteriori (MAP) estimation
-    - Element-wise Bayesian algorithm
+    - Element-wise Bayesian algorithm (Sparse Bayesian Learning, Relevance Vector Regression)
 
 - **Linear solvers**
     - Normal equations for overdetermined problems
@@ -82,8 +88,12 @@ sol = solve(prob, Multiplicative(Groups(inner => Lq(0.5), edges => Lq(2.0; L = D
 sol = solve(prob, Multiplicative(Groups(inner => Lq(0.5), edges => Lq(2.0)); multiparameter = true))
 sol = solve(prob, Bayesian(Lq(1.0)))
 
-# Space–frequency problem with a mixed norm: Hs[j] is the FRF matrix at frequency j
-sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)))
+# Space–frequency problems: Hs[j] is the FRF matrix at frequency j
+sol = solve(InverseProblem(Hs, Y), Multiplicative(Lq(0.5)))       # Lq: frequency by frequency
+sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)))   # mixed norm: coupled problem
+
+# Mixed norm with an operator along the frequencies (MSSP 2018): the problem is assembled
+sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5; Lf = diff_operator(nf, 1; h = Δf))))
 
 # Known diagonal noise covariance, posterior covariance and credible intervals
 sol = solve(prob, Bayesian(Lq(1.0)); R = σ², covariance = true)
@@ -93,8 +103,6 @@ sol.u        # reconstructed field
 sol.λ        # regularization parameter(s)
 sol.hyper    # other estimated quantities (τn, τs, q for the Bayesian formulation)
 ```
-
-See [docs/design/api.md](docs/design/api.md) for the design of the API.
 
 ## License
 

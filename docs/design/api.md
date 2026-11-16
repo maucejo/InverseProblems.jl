@@ -34,6 +34,7 @@ Le branchement à l'exécution n'est utilisé que pour la validation des argumen
 | matrice `nm × nr`                    | vecteur         | vecteur `nr`   | une fréquence      |
 | vecteur de matrices / tableau 3D     | matrice `nm×nf` | matrice `nr×nf`| espace–fréquence   |
 | matrice `nm·nt × nr·nt`              | matrice `nm×nt` | matrice `nr×nt`| espace–temps       |
+| matrice **creuse** (`SparseOperator`) | vecteur ou matrice | idem      | problème assemblé (p. ex. espace–fréquence vectorisé, fréquences couplées) |
 
 Les **lignes** de l'inconnue sont toujours les points de reconstruction : `Groups`, `L` et
 `Lpq` ont donc le même sens quel que soit le domaine (`L` agit sur la dimension spatiale).
@@ -41,12 +42,83 @@ Les **lignes** de l'inconnue sont toujours les points de reconstruction : `Group
 ## Termes de régularisation (= lois a priori)
 
 * `Lq(q; L = I)` — `‖L u‖_q^q`, `0 < q ≤ 2` ;
-* `Lpq(p, q; L = I)` — `Σᵢ (Σⱼ |(L U)ᵢⱼ|^p)^(q/p)` : `q` sur l'espace, `p` sur la fréquence/le temps ;
+* `Lpq(p, q; L = I, Lf = nothing, samples = nothing)` — `‖L U Lfᵀ‖_{p,q}^q =
+  Σᵢ (Σⱼ |(L U Lfᵀ)ᵢⱼ|^p)^(q/p)` : `q` sur l'espace, `p` sur la fréquence/le temps (MSSP 2018,
+  éq. 10–15). `L` agit sur l'espace, `Lf` le long des fréquences/instants (p. ex.
+  `Lf = diff_operator(nf, 1; h = Δf)`, éq. 11, pour la continuité des spectres) ; l'opérateur
+  global est `kron(Lf, L)` (éq. 15). `samples` sert aux problèmes déjà vectorisés (voir plus
+  bas) et ne se combine pas avec `Lf` ;
 * `Groups(rows₁ => Lq(0.5), rows₂ => Lq(2.0; L = D₂))` — régularisation par régions ;
   chaque groupe a sa propre matrice `L_g` (`size(L_g, 2) == length(rows_g)`), l'identité par défaut.
 
 Les `L_g` sont assemblés une fois en un opérateur global creux ; si tous sont l'identité,
 le chemin diagonal rapide est conservé.
+
+### Opérateurs de lissage (différences finies)
+
+* `fd_weights(h, npts, order)` — poids de différences finies sur une grille uniforme (port
+  de `ufdwt`) : une ligne par schéma, décentré en avant (ligne 1), centré (ligne du milieu)
+  ou décentré en arrière (dernière ligne) ;
+* `diff_operator(n, order; npts, h)` — opérateur 1D (port de `Dx_1D`) : schéma minimal
+  (`npts = order + 1`, matrice `(n − order) × n` sans lignes de bord : différences avant
+  pour l'ordre 1, différences secondes des points intérieurs pour l'ordre 2) ou centré
+  (`npts` impair `> order + 1`, matrice `n × n`, bords décentrés). Par défaut, `npts` est le
+  plus petit nombre impair de points (3 pour les ordres 1 et 2) ;
+* `diff_operator(coords, dir; order, npts, atol)` — opérateur le long de la direction `dir`
+  d'un nuage de points structuré (maillage 2D/3D, remplace `Dx_2D`/`Dy_2D`) : les points
+  sont regroupés en lignes de maillage le long de `dir` et l'opérateur 1D est appliqué sur
+  chaque ligne avec son propre pas (uniforme). Les points peuvent être dans un ordre
+  quelconque ; les colonnes de `L` suivent l'ordre de `coords`.
+
+```julia
+Groups(inner => Lq(0.5),
+       edges => Lq(2.0; L = diff_operator(coords[edges, :], 1)))
+Lq(2.0; L = [diff_operator(coords, 1); diff_operator(coords, 2)])   # gradient
+```
+
+* `space_sample_operator(nr, ns; space = I, samples = I)` — opérateur d'un problème
+  **vectorisé** espace–fréquence ou espace–temps (`u = vec(U)`, `U` : `nr × ns`, colonnes =
+  fréquences ou instants) : `L = kron(samples, space)`, soit
+  `L vec(U) = vec(space · U · samplesᵀ)`. `samples = Ls` seul : lissage le long des
+  fréquences/instants en chaque point (le `L` de `lissage_freq`) ; `space = Lx` seul :
+  lissage spatial à chaque fréquence/instant ; les deux : produit (dérivée croisée). Pour
+  une somme de pénalités, empiler les opérateurs (`[L₁; L₂]`) ;
+* `sample_rows(rows, nr, ns)` — indices des points `rows` à toutes les fréquences/instants
+  dans `vec(U)` (port de `define_group_mixed`), pour définir les groupes d'un problème
+  vectorisé ; l'opérateur du groupe est alors `space_sample_operator(length(rows), ns; …)`.
+
+Dans un problème espace–fréquence ou espace–temps (données matricielles), l'opérateur le
+long des fréquences ou du temps se donne directement par `Lpq(…; Lf)` : le problème est
+alors assemblé automatiquement (voir « Stratégie de résolution »). `space_sample_operator`
+et `sample_rows` servent aux problèmes que l'on vectorise soi-même.
+
+**Problèmes vectorisés : utilisation des normes mixtes.** Dans un problème vectorisé, `L u`
+est un vecteur : `Lpq` doit connaître sa disposition matricielle (points × échantillons).
+Le mot-clé `samples` donne le nombre de colonnes de `L u` ; le vecteur du groupe est replié
+colonne par colonne (points les plus rapides, comme `vec(U)`, `space_sample_operator` et
+`sample_rows`) avant le calcul de la norme mixte :
+
+| `L` du groupe | `samples` |
+|:--|:--|
+| `I` | `ns` |
+| `space_sample_operator(n, ns; space = Lx)` | `ns` |
+| `space_sample_operator(n, ns; samples = Ls)` (± `space`) | `size(Ls, 1)` |
+
+```julia
+Groups(sample_rows(inner, nr, nf) => Lpq(2, 0.5; samples = nf),
+       sample_rows(edges, nr, nf) => Lpq(2, 1; L = space_sample_operator(length(edges), nf; samples = Ls),
+                                         samples = size(Ls, 1)))
+```
+
+`Lpq(p, q; samples = nf)` sur le problème vectorisé est exactement le modèle du problème
+espace–fréquence couplé avec `Lpq(p, q)`. Une incohérence (`length(L u)` non multiple de
+`samples`) lève une `DimensionMismatch`, et une norme mixte sans `samples` sur une inconnue
+à une seule colonne lève une `ArgumentError` (elle se réduirait sinon silencieusement à `Lq`).
+
+Les opérateurs sont des matrices creuses et sont divisés par `h^order` (contrairement aux
+opérateurs 2D du code Python, non mis à l'échelle). `selection_matrix` et
+`define_group_mixed` n'ont plus d'équivalent : `Groups` et la disposition « lignes = espace »
+les remplacent.
 
 ## Formulations
 
@@ -69,6 +141,10 @@ sinon (les composantes du noyau de `L` ne sont pas régularisées).
 * `GCV()` — validation croisée généralisée ;
 * `BayesEstimator()` — minimum de `J_MAP(ℓ) = Σ log(γᵢ² + ℓ²) + (M − 2) log(Σ |βᵢ|²/(γᵢ² + ℓ²) / M)` (`reg_param_bayes`) ;
 * `Heuristic()` — initialisation seulement (MSSP 2017).
+* `LambdaMax()` — initialisation seulement : `λ = ‖2 Hᴴ y‖∞` (plus petite valeur pour
+  laquelle la solution ℓ1 est nulle) ; initialisation de `lpq_reg` et de la RVR. Par exemple,
+  `lpq_reg(A, b, p, q, R)` correspond à
+  `solve(InverseProblem(A, b), Multiplicative(Lpq(p, q)); R = diag(R), init = LambdaMax(), maxiter = 50)`.
 
 ## Modèle bayésien : cas réel et cas complexe
 
@@ -104,10 +180,15 @@ Bayesian(Lq(2.0); τn = 1.0, τs = 0.5, q = Fixed())      # tout fixé : posteri
 
 ## Covariance du bruit et incertitude a posteriori
 
-* `solve(...; R)` : covariance du bruit **connue et diagonale** (`I` par défaut, `σ²I`,
-  `Diagonal`, vecteur des variances ou matrice des variances au format de `y`). L'attache aux
+* `solve(...; R)` : covariance du bruit **connue et diagonale** — non fournie (`I`), `σ²I`,
+  variances de toutes les données (vecteur de longueur `length(y)`, matrice de la taille de
+  `y`, ou matrice diagonale `length(y) × length(y)`), ou, pour des données matricielles
+  (`nm × ns`), variances des `nm` points de mesure communes à tous les échantillons (vecteur
+  de longueur `nm`, `Diagonal` ou matrice diagonale `nm × nm`). Une matrice de la taille de
+  `y` est toujours lue comme les variances de toutes les données. L'attache aux
   données devient `‖y − Hu‖²_{R⁻¹}` ; elle est traitée une fois pour toutes par blanchiment
-  (`H ← R^{-1/2}H`, `y ← R^{-1/2}y`). Dans le modèle bayésien, la covariance du bruit est `R/τn` ; par défaut `τn = 1` si `R` est fourni (covariance exacte), `τn` optimisé sinon.
+  (`H ← R^{-1/2}H`, `y ← R^{-1/2}y`). Dans le modèle bayésien, la covariance du bruit est
+  `R/τn` ; par défaut `τn = 1` si `R` est fourni (covariance exacte), `τn` optimisé sinon.
 * `solve(...; covariance = true)` : covariance a posteriori de l'approximation gaussienne au
   point fixe, `Σ = (τn (H̃ᴴH̃ + LᴴDL))⁻¹` avec `D = λW` les poids IR (exacte pour `q = 2`) ;
   `τn = 1` pour les formulations additive et multiplicative (`R` supposée exacte). Pour un
@@ -140,6 +221,63 @@ Bayesian(Lq(2.0); τn = 1.0, τs = 0.5, q = Fixed())      # tout fixé : posteri
   ```julia
   sol = solve(prob, Bayesian(Lq(2.0)), ElementWise(); R = σ², covariance = true)
   ```
+
+## Stratégie de résolution des problèmes espace–fréquence
+
+Pour un problème espace–fréquence (opérateur bloc-diagonal), la stratégie est choisie par
+dispatch sur les termes de régularisation (`sample_coupling`), comme dans les articles :
+
+| termes de régularisation | stratégie |
+|:--|:--|
+| `Lq` uniquement (éventuellement en `Groups`) | **fréquence par fréquence** : chaque fréquence est un problème indépendant, avec ses propres paramètres de régularisation, hyperparamètres et critère d'arrêt, résolu en parallèle |
+| au moins un `Lpq` (sans `Lf`) | **problème espace–fréquence couplé, résolu bloc par bloc** : la norme mixte couple les fréquences par les poids seulement, les systèmes linéaires restent bloc-diagonaux (MSSP 2018 avec `L = I`, MSSP 2020) |
+| au moins un `Lpq` avec `Lf` | **problème assemblé** : l'opérateur `kron(Lf, L)` couple les fréquences dans les systèmes linéaires (bloc-tridiagonaux pour un `Lf` à 3 points) ; le problème est vectorisé automatiquement (`H` bloc-diagonal creux, groupes `sample_rows`, opérateurs `space_sample_operator`, `samples = size(Lf, 1)`) et résolu par Cholesky creux (MSSP 2018, éq. 10–18) |
+
+Le problème assemblé est aussi utilisé pour un problème espace–temps (matrice de convolution
+dense) dont un terme a un `Lf` (lissage temporel, MSSP 2018 §7). Le résultat a la disposition
+habituelle (`u` : `nr × ns`) ; la covariance a posteriori est alors une matrice
+`(nr·ns) × (nr·ns)` (les fréquences sont couplées). `Lf` sur un problème à une seule
+fréquence, ou sur un problème déjà vectorisé, lève une `ArgumentError`.
+
+```julia
+Lf  = diff_operator(nf, 1; h = Δf)                                    # éq. (11)
+sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5; Lf)))   # éq. (18) avec L = Lf ⊗ I
+```
+
+Il n'y a pas de couplage possible avec `Lq` seul pour un problème espace–fréquence. Pour
+coupler explicitement les fréquences autrement (un seul paramètre adaptatif pour `Lq`…), on
+assemble soi-même le problème vectorisé avec un `H` **creux** :
+
+```julia
+prob = InverseProblem(blockdiag(sparse.(Hs)...), vec(Y))    # (ny·nf) × (nu·nf), u de taille nu·nf
+sol  = solve(prob, Multiplicative(Lq(0.5)))                 # un seul α pour toutes les fréquences
+```
+
+Un `H` creux donne un `SparseOperator`, résolu en bloc par factorisations de Cholesky creuses
+(CHOLMOD, analyse symbolique réutilisée d'une itération à l'autre) : les systèmes
+`Hᴴ H + Lᴴ D L` restent creux (blocs + bande). Les groupes et `L` portent alors sur les
+`nu·nf` composantes de l'inconnue vectorisée. Les règles fondées sur la SVD (`LCurve`,
+`GCV`, `BayesEstimator`) ne sont pas disponibles (erreur explicite) ; `Heuristic()` utilise
+des estimations peu coûteuses des valeurs propres extrêmes de `A = (H L⁻¹)ᴴ(H L⁻¹)` pour un
+`L` carré inversible (MSSP 2018, éq. 26–27 ; `A` et `A⁻¹ = L (HᴴH)⁻¹ Lᴴ` appliqués comme
+opérateurs, sans être assemblés), de `A = Hᴴ H` sinon : `s_max = ‖A‖₂` et `s_min = 1/‖A⁻¹‖₂`,
+estimés par la méthode de la puissance (`normest`, `condest` en norme 2, comme
+`init_alpha`). Cette heuristique sert
+d'initialisation par défaut du MAP. Les problèmes à une fréquence et espace–temps sont toujours
+résolus en bloc. En interne, `solve` choisit la stratégie (`Joint` / `PerSample` / `Assembled`) puis
+appelle `solve_joint` (une méthode par couple formulation × algorithme) sur le problème
+complet ou sur chaque fréquence.
+
+Résultat d'une résolution fréquence par fréquence : `u` est `nr × nf` ; les grandeurs
+propres à chaque fréquence sont empilées en colonnes (`λ` : vecteur de longueur `nf`, ou
+matrice `G × nf` / `nr × nf` ; `hyper.τn`, `hyper.τs`, `hyper.q` de même) ; `hyper` contient
+aussi `iterations`, `converged` et `history` par fréquence ; la covariance est un vecteur de
+matrices `nr × nr`.
+
+```julia
+sol = solve(InverseProblem(Hs, Y), Multiplicative(Lq(0.5)); R = σ²)   # un α par fréquence
+sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)))       # problème couplé
+```
 
 ## Mots-clés communs de `solve`
 
@@ -201,16 +339,19 @@ src/
 │   ├── smoothing.jl        # assemblage des L_g en opérateur de lissage global
 │   ├── noise.jl            # covariance du bruit R, blanchiment des données
 │   ├── linsolve.jl         # caches (régime), résolutions pondérées (équations normales / Woodbury), covariance
+│   ├── sparsesolve.jl      # opérateurs creux : Cholesky creux (CHOLMOD), heuristique
 │   ├── minimize.jl         # minimisation 1D : Brent, recherche sur grille raffinée
 │   ├── spectrum.jl         # SVD / GSVD du problème sous forme standard
 │   ├── regparam.jl         # L-curve, GCV, estimateur bayésien, heuristique
+│   ├── fdiff.jl            # opérateurs de différences finies : fd_weights, diff_operator
 │   ├── norms.jl            # valeurs des normes, paramètre d'amortissement ε, poids IR
 │   ├── bayes.jl            # modèle bayésien réel / complexe, lois conditionnelles
 │   └── uncertainty.jl      # posterior_std, posterior_samples, credible_interval
 └── solvers/                # algorithmes de résolution
-    ├── ir.jl               # IR : formulations additive et multiplicative, `solve`
+    ├── ir.jl               # IR : formulations additive et multiplicative
     ├── map.jl              # MAP : formulation bayésienne hiérarchique
-    └── elementwise.jl      # bayésien élément par élément (RVR)
+    ├── elementwise.jl      # bayésien élément par élément (RVR)
+    └── strategy.jl         # `solve` : stratégie (couplée / fréquence par fréquence)
 ```
 
 * `types/` ne contient que des définitions de types, leurs constructeurs et leur validation ;
@@ -218,7 +359,7 @@ src/
 * `utils/` regroupe les briques numériques partagées. C'est le seul endroit qui dépend de la
   structure de `H` (dense / bloc-diagonal) et de `L` (identité / matrice) : un nouvel opérateur
   se branche en ajoutant des méthodes à `weighted_solve`, `spectrum` et `posterior_covariance`.
-* `solvers/` contient une méthode de `solve` par couple (formulation, algorithme) : un nouvel
+* `solvers/` contient une méthode de `solve_joint` par couple (formulation, algorithme), `strategy.jl` le `solve` public : un nouvel
   algorithme (p. ex. `Gibbs` pour l'inférence bayésienne complète) se branche en ajoutant un
   type dans `types/algorithms.jl` et un fichier dans `solvers/`.
 * Dans `InverseProblems.jl`, chaque `include` est suivi des `export` qu'il fournit ; l'ordre
