@@ -25,6 +25,15 @@ regularization (Aucejo & De Smet, MSSP 2019). Default algorithm for [`Bayesian`]
 struct MAP <: Algorithm end
 
 """
+    ElementWise()
+
+Element-wise Bayesian algorithm (Relevance Vector Regression) for [`Bayesian`](@ref): each
+component of `L u` has its own Gaussian prior precision, estimated jointly with `u` (sparse
+Bayesian learning).
+"""
+struct ElementWise <: Algorithm end
+
+"""
     default_algorithm(formulation)
 
 Algorithm used by `solve(prob, formulation)` when none is given.

@@ -97,7 +97,7 @@ end
 """
     initial_solution(cache, R, init)
 
-Tikhonov initial solution `(Hᴴ H + α₀ Lᴴ L)⁻¹ Hᴴ y`.
+Tikhonov initial solution `(Hᴴ H + α0 Lᴴ L)⁻¹ Hᴴ y`.
 
 **Inputs**
 - `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
@@ -105,13 +105,13 @@ Tikhonov initial solution `(Hᴴ H + α₀ Lᴴ L)⁻¹ Hᴴ y`.
 - `init` - `Real` or `ParameterChoice`: initial regularization parameter, or rule selecting it
 
 **Outputs**
-- `U₀` - `Matrix`: initial solution (`nr × ns`)
-- `α₀` - `Real`: initial regularization parameter
+- `U0` - `Matrix`: initial solution (`nr × ns`)
+- `α0` - `Real`: initial regularization parameter
 """
 function initial_solution(c, R::Regularization, init)
     W = ones(real(eltype(c)), R.nout, c.ns)
-    α₀ = select_parameter(init, c, R.L, W)
-    return weighted_solve(c, R.L, α₀ .* W), α₀
+    α0 = select_parameter(init, c, R.L, W)
+    return weighted_solve(c, R.L, α0 .* W), α0
 end
 
 default_init(f::Additive) = f.λ
@@ -150,14 +150,11 @@ algorithm is omitted, [`default_algorithm`](@ref) is used.
 - `formulation` - `Formulation`: `Additive`, `Multiplicative` or `Bayesian`
 - `algorithm` - `Algorithm`: resolution algorithm (`IR()`, `MAP()`)
 - `R` - `Nothing`, `UniformScaling`, `Diagonal`, `AbstractVector` or `AbstractMatrix`: known
-  diagonal noise covariance — not provided (default, equivalent to `I`), `σ²I`, or the noise
-  variances (vector, or matrix with the layout of `y`). The data fidelity is `‖y - Hu‖²_{R⁻¹}`
-- `covariance` - `Bool`: also compute the posterior covariance of the solution. For the
-  additive and multiplicative formulations, `R` is then taken as the exact noise covariance
+  diagonal noise covariance — not provided (default, equivalent to `I`), `σ²I`, or the noise variances (vector, or matrix with the layout of `y`). The data fidelity is `‖y - Hu‖²_{R⁻¹}`
+- `covariance` - `Bool`: also compute the posterior covariance of the solution. For the additive and multiplicative formulations, `R` is then taken as the exact noise covariance
 - `tol` - `Real`: tolerance on the relative `ℓ1` variation of `u`
 - `maxiter` - `Integer`: maximum number of iterations
-- `init` - `Real` or `ParameterChoice`: initial Tikhonov solution — initial regularization
-  parameter, or rule selecting it (`Heuristic()`, `LCurve()`, `GCV()`, `BayesEstimator()`)
+- `init` - `Real` or `ParameterChoice`: initial Tikhonov solution — initial regularization parameter, or rule selecting it (`Heuristic()`, `LCurve()`, `GCV()`, `BayesEstimator()`)
 
 **Outputs**
 - `sol` - `InverseSolution`: solution, regularization parameter(s), hyperparameters,
@@ -167,11 +164,11 @@ solve(prob::InverseProblem, f::Formulation; kwargs...) =
     solve(prob, f, default_algorithm(f); kwargs...)
 
 function solve(prob::InverseProblem, f::Union{Additive,Multiplicative}, ::IR;
-               R = nothing, covariance::Bool = false, tol = 1e-4, maxiter = 100, init = default_init(f))
+               R = nothing, covariance::Bool = false, tol = 1e-8, maxiter = 100, init = default_init(f))
     c, reg = setup(prob, f.prior, R)
-    U₀, _ = initial_solution(c, reg, init)
-    ε = dampings(reg, apply(reg.L, U₀))
-    st = reweighting(c, reg, f, U₀, ε; tol, maxiter)
+    U0, _ = initial_solution(c, reg, init)
+    ε = dampings(reg, apply(reg.L, U0))
+    st = reweighting(c, reg, f, U0, ε; tol, maxiter)
     Σ = covariance ? posterior_covariance(c, reg.L, st.D) : nothing
     return InverseSolution(output_shape(prob, st.U), st.λ, (;),
                            length(st.history), st.converged, st.history, Σ)

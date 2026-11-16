@@ -4,9 +4,7 @@
 #
 #     (Hᴴ H + Lᴴ D L) u = Hᴴ y        (D diagonal, positive)
 #
-# and, for the posterior covariance, to the inverse of the same matrix. The structure of H
-# (dense / block-diagonal), the regime of the problem and the smoothing operator L are
-# exploited through dispatch:
+# and, for the posterior covariance, to the inverse of the same matrix. The structure of H (dense / block-diagonal), the regime of the problem and the smoothing operator L are exploited through dispatch:
 #
 #   regime                    L                   system factorized
 #   nm ≥ nr (over/square)     any                 normal equations           nr × nr
@@ -19,17 +17,16 @@
 #     (Hᴴ H + D)⁻¹ = D⁻¹ - D⁻¹ Hᴴ (I + H D⁻¹ Hᴴ)⁻¹ H D⁻¹
 #     (Hᴴ H + D)⁻¹ Hᴴ y = D⁻¹ Hᴴ (I + H D⁻¹ Hᴴ)⁻¹ y
 # and, for L square invertible, (Hᴴ H + Lᴴ D L)⁻¹ = L⁻¹ (H̃ᴴ H̃ + D)⁻¹ L⁻ᴴ.
-
 """
-Cache of the quantities reused across iterations for a dense operator. The type of `HᴴH`
+Cache of the quantities reused across iterations for a dense operator. The type of `HtH` (`Hᴴ H`)
 encodes the regime: a matrix when `nm ≥ nr` (over-determined or square problem), `nothing`
 when `nm < nr` (under-determined problem, `Hᴴ H` is not needed).
 """
 struct DenseCache{T, M<:AbstractMatrix{T}, G<:Union{Matrix{T},Nothing}}
     H::M
     y::Vector{T}
-    HᴴH::G
-    Hᴴy::Vector{T}
+    HtH::G
+    Hty::Vector{T}
     nr::Int
     ns::Int
 end
@@ -54,8 +51,8 @@ function dense_cache(H::AbstractMatrix, y::AbstractVecOrMat, nr, ns, σ2 = nothi
     Hc = Matrix{T}(H)
     yc = Vector{T}(vec(y))
     whiten!(Hc, yc, σ2)
-    HᴴH = size(Hc, 1) >= size(Hc, 2) ? Hc' * Hc : nothing
-    return DenseCache(Hc, yc, HᴴH, Hc' * yc, nr, ns)
+    HtH = size(Hc, 1) >= size(Hc, 2) ? Hc' * Hc : nothing
+    return DenseCache(Hc, yc, HtH, Hc' * yc, nr, ns)
 end
 
 """
@@ -92,7 +89,7 @@ global_operator(c::DenseCache, S::MatrixSmoothing) =
     c.ns == 1 ? S.L : kron(sparse(I, c.ns, c.ns), S.L)
 
 # Gram matrix Hᴴ H (computed on demand for an under-determined problem)
-gram(c::Overdetermined) = c.HᴴH
+gram(c::Overdetermined) = c.HtH
 gram(c::Underdetermined) = c.H' * c.H
 
 # Lᴴ diag(d) L
@@ -138,7 +135,7 @@ and on the smoothing operator (see the table at the top of `linsolve.jl`).
 - `U` - `Matrix`: solution (`nr × ns`)
 """
 weighted_solve(c::Overdetermined, S::SmoothingOperator, D::AbstractMatrix{<:Real}) =
-    reshape(normal_solve(c.HᴴH, weighted_gram(c, S, vec(D)), c.Hᴴy), c.nr, c.ns)
+    reshape(normal_solve(c.HtH, weighted_gram(c, S, vec(D)), c.Hty), c.nr, c.ns)
 
 weighted_solve(c::Underdetermined, ::IdentitySmoothing, D::AbstractMatrix{<:Real}) =
     reshape(woodbury_solve(c.H, vec(D), c.y), c.nr, c.ns)
@@ -149,7 +146,7 @@ function weighted_solve(c::Underdetermined, S::InvertibleSmoothing, D::AbstractM
 end
 
 weighted_solve(c::Underdetermined, S::SingularSmoothing, D::AbstractMatrix{<:Real}) =
-    reshape(normal_solve(gram(c), weighted_gram(c, S, vec(D)), c.Hᴴy), c.nr, c.ns)
+    reshape(normal_solve(gram(c), weighted_gram(c, S, vec(D)), c.Hty), c.nr, c.ns)
 
 function weighted_solve(c::BlockCache, S::SmoothingOperator, D::AbstractMatrix{<:Real})
     U = Matrix{eltype(c)}(undef, c.nr, c.ns)
@@ -176,15 +173,15 @@ computed from the normal equations or the Woodbury identity, as in [`weighted_so
   `nr × nr` matrix per sample)
 """
 posterior_covariance(c::Overdetermined, S::SmoothingOperator, D::AbstractMatrix{<:Real}) =
-    Hermitian(inv(cholesky(Hermitian(c.HᴴH + weighted_gram(c, S, vec(D))))))
+    Hermitian(inv(cholesky(Hermitian(c.HtH + weighted_gram(c, S, vec(D))))))
 
 posterior_covariance(c::Underdetermined, ::IdentitySmoothing, D::AbstractMatrix{<:Real}) =
     Hermitian(woodbury_inverse(c.H, vec(D)))
 
 function posterior_covariance(c::Underdetermined, S::InvertibleSmoothing, D::AbstractMatrix{<:Real})
-    Σ̃ = woodbury_inverse(standard_form(c, S), vec(D))         # covariance of v = L u
-    X = smoothing_ldiv(S, Matrix(Σ̃), c.nr)                    # L⁻¹ Σ̃
-    return Hermitian(Matrix(smoothing_ldiv(S, Matrix(X'), c.nr)'))   # L⁻¹ Σ̃ L⁻ᴴ
+    Σv = woodbury_inverse(standard_form(c, S), vec(D))         # covariance of v = L u
+    X = smoothing_ldiv(S, Matrix(Σv), c.nr)                    # L⁻¹ Σv
+    return Hermitian(Matrix(smoothing_ldiv(S, Matrix(X'), c.nr)'))   # L⁻¹ Σv L⁻ᴴ
 end
 
 posterior_covariance(c::Underdetermined, S::SingularSmoothing, D::AbstractMatrix{<:Real}) =

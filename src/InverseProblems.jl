@@ -43,7 +43,7 @@ include("types/formulations.jl") # additive, multiplicative, Bayesian formulatio
 export Additive, Multiplicative, Bayesian, Estimated, Fixed
 
 include("types/algorithms.jl")   # resolution algorithms
-export IR, MAP
+export IR, MAP, ElementWise
 
 include("types/solution.jl")     # result type
 export InverseSolution
@@ -66,5 +66,6 @@ include("solvers/ir.jl") # IR algorithm: additive and multiplicative formulation
 export solve
 
 include("solvers/map.jl") # MAP: hierarchical Bayesian formulation
+include("solvers/elementwise.jl") # element-wise Bayesian (RVR)
 
 end

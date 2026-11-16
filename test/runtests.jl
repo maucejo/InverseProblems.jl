@@ -221,15 +221,78 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test_throws ArgumentError posterior_std(solve(prob, Additive(Lq(2.0); λ = 0.3)))
     end
 
+    @testset "Generalized Gaussian priors (real / complex)" begin
+        IP = InverseProblems
+        # real prior ∝ exp(-(τs/q)|v|^q), complex prior ∝ exp(-τs|v|^q): the alternating
+        # estimation of (q, τs) recovers the parameters of the sampled distribution
+        Random.seed!(8)
+        n, τ = 20_000, 4.0
+        cases = [(IP.RealField(), 2.0, randn(n) / sqrt(τ)),                          # N(0, 1/τ)
+                 (IP.RealField(), 1.0, (2 .* rand(Bool, n) .- 1) .* randexp(n) ./ τ),  # Laplace
+                 (IP.ComplexField(), 2.0, randn(ComplexF64, n) / sqrt(τ))]            # CN(0, 1/τ)
+        for (F, qtrue, v) in cases
+            q, τs = 1.0, 1.0
+            for _ in 1:50
+                q = IP.optimal_shape(F, v, τs, (0.05, 2.0))
+                τs = IP.signal_precision(F, v, q)
+            end
+            @test q ≈ qtrue rtol = 0.05
+            @test τs ≈ τ rtol = 0.1
+        end
+    end
+
+    @testset "Element-wise Bayesian (RVR)" begin
+        # reference: direct port of the original RVR implementation
+        function rvr_ref(A, b)
+            α, β, tol, maxit = 1.0, 1e-18, 1e-8, 200
+            Atb, AtA = A'b, A'A
+            X0 = (AtA + norm(2Atb, Inf) * I) \ Atb
+            X, Λ = copy(X0), Diagonal(zeros(size(A, 2)))
+            crit, ee = 1.0, 0
+            while crit > tol && ee <= maxit
+                Λ = Diagonal(α ./ (β .+ abs2.(X0)))
+                X = (AtA + Λ) \ Atb
+                crit = norm(X - X0, 1) / norm(X0, 1)
+                ee += 1
+                X0 = X
+            end
+            return X, inv(AtA + Λ)
+        end
+        Random.seed!(9)
+        for T in (Float64, ComplexF64), (nm, nr) in ((30, 20), (15, 25))
+            σ = 0.05
+            u = zeros(T, nr); u[[4, 13]] .= (1, -2)
+            # dense operator, R = σ² I (τn = 1)
+            H = randn(T, nm, nr)
+            y = H * u + σ * randn(T, nm)
+            s = solve(InverseProblem(H, y), Bayesian(Lq(2.0)), ElementWise(); R = σ^2 * I, covariance = true)
+            Xr, Pr = rvr_ref(H / σ, y / σ)
+            @test s.u ≈ Xr rtol = 1e-6
+            @test s.covariance ≈ Pr rtol = 1e-6
+            @test s.hyper.τn == 1
+            # block-diagonal operator: one RVR per frequency
+            Hs = [randn(T, nm, nr) for _ in 1:3]
+            Y = reduce(hcat, [Hj * u + σ * randn(T, nm) for Hj in Hs])
+            s = solve(InverseProblem(Hs, Y), Bayesian(Lq(2.0)), ElementWise(); R = σ^2 * I, covariance = true)
+            for j in 1:3
+                Xr, Pr = rvr_ref(Hs[j] / σ, Y[:, j] / σ)
+                @test s.u[:, j] ≈ Xr rtol = 1e-5
+                @test s.covariance[j] ≈ Pr rtol = 1e-5
+            end
+        end
+        @test_throws ArgumentError solve(InverseProblem(randn(5, 4), randn(5)), Bayesian(Lq(1.0)), ElementWise())
+        @test_throws ArgumentError solve(InverseProblem(randn(5, 4), randn(5)), Bayesian(Lq(2.0); τs = 1.0), ElementWise())
+    end
+
     @testset "Bayesian hyperparameters and credible intervals" begin
         @test_throws ArgumentError Bayesian(Lq(1.0); τn = -1.0)
         @test_throws ArgumentError Bayesian(Lq(1.0); τn = [1.0])
         # Gaussian prior with fixed exact hyperparameters: exact Gaussian posterior
-        #   real:    u ~ N(0, 1)  ⇔ exp(-τs u²) with τs = 1/2 ; noise N(0, σ²), τn = 1
+        #   real:    u ~ N(0, 1)  ⇔ exp(-τs u²/2) with τs = 1 ; noise N(0, σ²), τn = 1
         #   complex: u ~ CN(0, 1) ⇔ exp(-τs |u|²) with τs = 1  ; noise CN(0, σ²), τn = 1
         Random.seed!(7)
         n, m, σ = 10, 30, 0.5
-        for (T, τs) in ((Float64, 0.5), (ComplexF64, 1.0))
+        for (T, τs) in ((Float64, 1.0), (ComplexF64, 1.0))
             H = randn(T, m, n)
             reg = Bayesian(Lq(2.0); τn = 1.0, τs = τs, q = Fixed())
             Σexact = inv(H'H / σ^2 + I)

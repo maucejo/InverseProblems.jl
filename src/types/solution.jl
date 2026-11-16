@@ -8,7 +8,8 @@ Result of [`solve`](@ref). See [`posterior_std`](@ref), [`posterior_samples`](@r
 - `u` - `AbstractVector` or `AbstractMatrix`: reconstructed unknown (vector, or `nr × ns`
   matrix, with the layout of the problem)
 - `λ` - `Real` or `Vector{<:Real}`: final regularization parameter(s) — the adaptive one for
-  the multiplicative formulations, `τs ./ (c τn)` for the Bayesian formulation
+  the multiplicative formulations, `φ_g τs_g / (c τn)` for the Bayesian formulation (`c = 1/2`,
+  `φ_g = 1/q_g` for real data, `c = φ_g = 1` for complex data)
 - `hyper` - `NamedTuple`: other estimated quantities (`τn`, `τs`, `q` for the Bayesian
   formulation, empty otherwise)
 - `iterations` - `Int`: number of iterations of the outer loop

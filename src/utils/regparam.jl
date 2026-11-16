@@ -149,7 +149,7 @@ upper one.
 - `W` - `AbstractMatrix{<:Real}`: weights (size of `L U`)
 
 **Outputs**
-- `α₀` - `Real`: initial regularization parameter
+- `α0` - `Real`: initial regularization parameter
 """
 function select_parameter(::Heuristic, c::Union{DenseCache,BlockCache}, L::SmoothingOperator,
                           W::AbstractMatrix{<:Real})

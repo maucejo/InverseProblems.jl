@@ -75,13 +75,18 @@ sinon (les composantes du noyau de `L` ne sont pas régularisées).
 | | réel | complexe (circulaire) |
 |:--|:--|:--|
 | vraisemblance | `(τn/2π)^{N/2} exp(−τn‖r‖²/2)` | `(τn/π)^N exp(−τn‖r‖²)` |
-| a priori (par composante de `L_g u_g`) | `q τs^{1/q} / (2Γ(1/q)) exp(−τs|v|^q)` | `q τs^{2/q} / (2πΓ(2/q)) exp(−τs|v|^q)` |
+| a priori (par composante de `L_g u_g`) | `q^{1−1/q} τs^{1/q} / (2Γ(1/q)) exp(−(τs/q)|v|^q)` | `q τs^{2/q} / (2πΓ(2/q)) exp(−τs|v|^q)` |
 | `τn` | `(N/2 + a − 1) / (‖r‖²/2 + b)` | `(N + a − 1) / (‖r‖² + b)` |
-| `τs_g` | `(M_g/q_g + a − 1) / (Σ|v|^q + b)` | `(2M_g/q_g + a − 1) / (Σ|v|^q + b)` |
-| `λ_g` (étape en `u`) | `2 τs_g / τn` | `τs_g / τn` |
+| `τs_g` | `(M_g/q_g + a − 1) / (Σ|v|^q/q_g + b)` | `(2M_g/q_g + a − 1) / (Σ|v|^q + b)` |
+| objectif en `q_g` | `M logΓ(1/q) − (M/q) log(τs/q) − (a+M−1) log q + bq + (τs/q)Σ|v|^q` | `M logΓ(2/q) − (2M/q) log τs − (a+M−1) log q + bq + τsΣ|v|^q` |
+| `λ_g` (étape en `u`) | `2 τs_g / (q_g τn)` | `τs_g / τn` |
 
-Initialisation : `τn = N / yᴴ(I + H(Lᴴλ₀WL)⁻¹Hᴴ)⁻¹y` (identité de Woodbury, valable même
-si `Lᴴ W L` est singulière), `τs = λ₀ c τn`.
+Soit, avec les facteurs `exp(−c τn‖r‖²)` et `exp(−φ_g τs_g‖L_g u_g‖_q^q)` : `c = 1/2`,
+`φ_g = 1/q_g` en réel, `c = φ_g = 1` en complexe, et `λ_g = φ_g τs_g / (c τn)`. Pour `q = 2`,
+les deux lois a priori sont des lois normales (réelle ou complexe) de précision `τs`.
+
+Initialisation : `τn = N / yᴴ(I + H(Lᴴλ0WL)⁻¹Hᴴ)⁻¹y` (identité de Woodbury, valable même
+si `Lᴴ W L` est singulière), `τs_g = λ0 c τn / φ_g`.
 
 ### Hyperparamètres optimisés ou fixés
 
@@ -118,6 +123,21 @@ Bayesian(Lq(2.0); τn = 1.0, τs = 0.5, q = Fixed())      # tout fixé : posteri
 * `IR()` — condition d'optimalité du premier ordre (JSV 2020, MSSP 2020), seul algorithme
   des formulations additive et multiplicative ;
 * `MAP()` — maximum a posteriori du modèle hiérarchique (MSSP 2019), défaut de `Bayesian`.
+* `ElementWise()` — bayésien élément par élément (*Relevance Vector Regression*) pour
+  `Bayesian` : une précision a priori gaussienne `τ_i` par composante de `L u`, estimée
+  conjointement avec `u` :
+
+      τ_i = (k/2 + a − 1) / (φ |v_i|² + b)      (= 1/(|v_i|² + 2b) en réel, a/(|v_i|² + b) en complexe)
+      u   = (Hᴴ H + Lᴴ Λ L)⁻¹ Hᴴ y,   Λ = φ τ / (c τn)
+
+  Initialisation : Tikhonov avec `λ = ‖2 Hᴴ y‖∞` (par fréquence pour l'opérateur
+  bloc-diagonal). Seuls les opérateurs de lissage de l'a priori sont utilisés : les termes
+  doivent être `Lq(2.0)` et `τs = Estimated()` ; `τn` est fixé ou estimé comme pour `MAP()`.
+  `sol.λ` contient `Λ` (format de `L u`), `sol.hyper.τs` les précisions `τ_i`.
+
+  ```julia
+  sol = solve(prob, Bayesian(Lq(2.0)), ElementWise(); R = σ², covariance = true)
+  ```
 
 ## Mots-clés communs de `solve`
 
@@ -177,7 +197,8 @@ src/
 │   └── uncertainty.jl      # posterior_std, posterior_samples, credible_interval
 └── solvers/                # algorithmes de résolution
     ├── ir.jl               # IR : formulations additive et multiplicative, `solve`
-    └── map.jl              # MAP : formulation bayésienne hiérarchique
+    ├── map.jl              # MAP : formulation bayésienne hiérarchique
+    └── elementwise.jl      # bayésien élément par élément (RVR)
 ```
 
 * `types/` ne contient que des définitions de types, leurs constructeurs et leur validation ;
