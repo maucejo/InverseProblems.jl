@@ -141,37 +141,37 @@ end
 # For a vectorized problem, the unknown is u = vec(U), U being the nr × ns matrix of the field
 # (rows: reconstruction points, columns: frequencies or time samples), so that
 # u[i + (j - 1) nr] = U[i, j]. With this ordering,
-#     kron(Ls, Lx) * vec(U) = vec(Lx * U * transpose(Ls)).
+#     kron(Lc, L) * vec(U) = vec(L * U * transpose(Lc)).
 
 to_operator(L::UniformScaling, n) = sparse(L, n, n)
 to_operator(L::AbstractMatrix, n) =
     size(L, 2) == n ? sparse(L) : throw(DimensionMismatch("operator with $(size(L, 2)) columns for a dimension $n"))
 
 """
-    space_sample_operator(nr, ns; space = I, samples = I)
+    space_sample_operator(nr, ns; L = I, Lc = I)
 
-Smoothing operator of a vectorized space–frequency or space–time problem, acting on
-`u = vec(U)` (`U`: `nr × ns`, columns = frequencies or time samples):
+Operator of a vectorized space–frequency or space–time problem, acting on `u = vec(U)`
+(`U`: `nr × ns`, rows = reconstruction points, columns = frequencies or time samples):
 
-    L = kron(samples, space),    L * vec(U) = vec(space * U * transpose(samples))
+    L = kron(Lc, L),    L * vec(U) = vec(L * U * transpose(Lc))
 
-* `samples = Ls`, `space = I`: smoothing along the frequencies / time samples at each point
-  (e.g. `Ls = diff_operator(ns, 1; h = Δf)`);
-* `samples = I`, `space = Lx`: spatial smoothing at each frequency / time sample;
-* both: product of the two operators (mixed derivative). For a sum of penalties, stack the
-  operators: `[space_sample_operator(nr, ns; samples = Ls); space_sample_operator(nr, ns; space = Lx)]`.
+* `Lc = Lf`, `L = I`: smoothing along the frequencies / time samples at each point
+  (e.g. `Lf = diff_operator(ns, 1; h = Δf)`);
+* `Lc = I`, `L = Lx`: spatial smoothing at each frequency / time sample;
+* both: product of the two operators (mixed derivative, MSSP 2018 Eq. (15)). For a sum of
+  penalties, stack the operators: `[space_sample_operator(nr, ns; Lc = Lf); space_sample_operator(nr, ns; L = Lx)]`.
 
 **Inputs**
-- `nr` - `Integer`: number of reconstruction points
-- `ns` - `Integer`: number of frequencies or time samples
-- `space` - `AbstractMatrix` or `UniformScaling`: spatial operator (`nr` columns)
-- `samples` - `AbstractMatrix` or `UniformScaling`: operator along the samples (`ns` columns)
+- `nr` - `Integer`: number of reconstruction points (rows of `U`)
+- `ns` - `Integer`: number of frequencies or time samples (columns of `U`)
+- `L` - `AbstractMatrix` or `UniformScaling`: operator acting on the rows (`nr` columns)
+- `Lc` - `AbstractMatrix` or `UniformScaling`: operator acting on the columns (`ns` columns)
 
 **Outputs**
-- `L` - `SparseMatrixCSC`: operator of size `(size(samples, 1)·size(space, 1)) × (ns·nr)`
+- `L` - `SparseMatrixCSC`: operator of size `(size(Lc, 1)·size(L, 1)) × (ns·nr)`
 """
-space_sample_operator(nr::Integer, ns::Integer; space = I, samples = I) =
-    kron(to_operator(samples, ns), to_operator(space, nr))
+space_sample_operator(nr::Integer, ns::Integer; L = I, Lc = I) =
+    kron(to_operator(Lc, ns), to_operator(L, nr))
 
 """
     sample_rows(rows, nr, ns)

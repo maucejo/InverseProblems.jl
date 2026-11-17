@@ -1,4 +1,4 @@
-using InverseProblems
+using SourceEstimation
 using LinearAlgebra
 using Random
 using SparseArrays
@@ -15,18 +15,18 @@ end
 
 const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
 
-@testset "InverseProblems.jl" begin
+@testset "SourceEstimation.jl" begin
     @testset "Problem construction" begin
         H = randn(10, 6)
         @test size(InverseProblem(H, randn(10)).y) == (10,)
         @test_throws DimensionMismatch InverseProblem(H, randn(9))
         # space–time: H acts on vec(U), U is 3 × 2
         p = InverseProblem(randn(10, 6), randn(5, 2))
-        @test InverseProblems.unknown_size(p) == (3, 2)
+        @test SourceEstimation.unknown_size(p) == (3, 2)
         # space–frequency, vector of blocks or 3D array
         Hs = [randn(4, 3) for _ in 1:5]
-        @test InverseProblems.unknown_size(InverseProblem(Hs, randn(4, 5))) == (3, 5)
-        @test InverseProblems.unknown_size(InverseProblem(randn(4, 3, 5), randn(4, 5))) == (3, 5)
+        @test SourceEstimation.unknown_size(InverseProblem(Hs, randn(4, 5))) == (3, 5)
+        @test SourceEstimation.unknown_size(InverseProblem(randn(4, 3, 5), randn(4, 5))) == (3, 5)
     end
 
     @testset "Regularization terms" begin
@@ -34,21 +34,21 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test_throws ArgumentError Lq(3.0)
         @test_throws ArgumentError Lpq(2, 2.5)
         U = [1.0 -2.0; 0.0 3.0]
-        @test InverseProblems.penalty(Lq(1.0), U) ≈ 6
-        @test InverseProblems.penalty(Lpq(2, 1), U) ≈ sqrt(5) + 3
-        @test InverseProblems.penalty(Lpq(2, 2), U) ≈ InverseProblems.penalty(Lq(2.0), U)
+        @test SourceEstimation.penalty(Lq(1.0), U) ≈ 6
+        @test SourceEstimation.penalty(Lpq(2, 1), U) ≈ sqrt(5) + 3
+        @test SourceEstimation.penalty(Lpq(2, 2), U) ≈ SourceEstimation.penalty(Lq(2.0), U)
         G = Groups(1:1 => Lq(1.0), 2:2 => Lq(2.0))
-        R = InverseProblems.Regularization(G, 2)
-        @test R.L isa InverseProblems.IdentitySmoothing
-        @test InverseProblems.penalty(R, U) ≈ 3 + 9
+        R = SourceEstimation.Regularization(G, 2)
+        @test R.L isa SourceEstimation.IdentitySmoothing
+        @test SourceEstimation.penalty(R, U) ≈ 3 + 9
         # one smoothing matrix per group, assembled into a global operator
         D = [1.0 -1.0]
-        R = InverseProblems.Regularization(Groups([1, 2] => Lq(2.0; L = D), [3] => Lq(1.0)), 3)
+        R = SourceEstimation.Regularization(Groups([1, 2] => Lq(2.0; L = D), [3] => Lq(1.0)), 3)
         @test Matrix(R.L.L) == [1 -1 0; 0 0 1]
         @test R.rows == [[1], [2]]
-        @test_throws DimensionMismatch InverseProblems.groups(Groups([1] => Lq(2.0; L = D), [2] => Lq(1.0)), 2)
-        @test_throws ArgumentError InverseProblems.groups(Groups(1:2 => Lq(1.0), 2:3 => Lq(2.0)), 3)
-        @test_throws ArgumentError InverseProblems.groups(Groups(1:2 => Lq(1.0)), 3)
+        @test_throws DimensionMismatch SourceEstimation.groups(Groups([1] => Lq(2.0; L = D), [2] => Lq(1.0)), 2)
+        @test_throws ArgumentError SourceEstimation.groups(Groups(1:2 => Lq(1.0), 2:3 => Lq(2.0)), 3)
+        @test_throws ArgumentError SourceEstimation.groups(Groups(1:2 => Lq(1.0)), 3)
     end
 
     @testset "Finite-difference operators" begin
@@ -80,15 +80,15 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         nr, ns = 6, 5
         Ux = randn(ComplexF64, nr, ns)
         Ls, Lx = diff_operator(ns, 1; npts = 2), diff_operator(nr, 2)
-        @test space_sample_operator(nr, ns; samples = Ls) * vec(Ux) ≈ vec(Ux * transpose(Ls))
-        @test space_sample_operator(nr, ns; space = Lx) * vec(Ux) ≈ vec(Lx * Ux)
-        @test space_sample_operator(nr, ns; space = Lx, samples = Ls) * vec(Ux) ≈ vec(Lx * Ux * transpose(Ls))
-        @test size(space_sample_operator(nr, ns; samples = Ls)) == ((ns - 1) * nr, ns * nr)
+        @test space_sample_operator(nr, ns; Lc = Ls) * vec(Ux) ≈ vec(Ux * transpose(Ls))
+        @test space_sample_operator(nr, ns; L = Lx) * vec(Ux) ≈ vec(Lx * Ux)
+        @test space_sample_operator(nr, ns; L = Lx, Lc = Ls) * vec(Ux) ≈ vec(Lx * Ux * transpose(Ls))
+        @test size(space_sample_operator(nr, ns; Lc = Ls)) == ((ns - 1) * nr, ns * nr)
         @test space_sample_operator(nr, ns) == sparse(1.0I, nr * ns, nr * ns)
-        @test_throws DimensionMismatch space_sample_operator(nr, ns; samples = diff_operator(ns + 1, 1))
+        @test_throws DimensionMismatch space_sample_operator(nr, ns; Lc = diff_operator(ns + 1, 1))
         @test sample_rows([2, 4], nr, ns) == [2, 4, 8, 10, 14, 16, 20, 22, 26, 28]
         rows = [2, 3, 4]
-        @test space_sample_operator(3, ns; samples = Ls) * vec(Ux)[sample_rows(rows, nr, ns)] ≈
+        @test space_sample_operator(3, ns; Lc = Ls) * vec(Ux)[sample_rows(rows, nr, ns)] ≈
               vec(Ux[rows, :] * transpose(Ls))
         # space–frequency operator of MSSP 2018: Lf of Eq. (11), L = (I_N ⊗ Ls)(Lf ⊗ I_M) of
         # Eq. (15), regularization term ‖L F‖_{p,q}^q of Eq. (14)
@@ -98,11 +98,11 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         Lsp, Lfr = diff_operator(M, 2), diff_operator(N, 1; h = Δf)
         @test Matrix(Lfr) ≈ Lf11 ./ Δf
         L15 = kron(sparse(I, N, N), Lsp) * kron(Lfr, sparse(I, M, M))
-        @test L15 ≈ space_sample_operator(M, N; space = Lsp, samples = Lfr)
+        @test L15 ≈ space_sample_operator(M, N; L = Lsp, Lc = Lfr)
         Fm = randn(ComplexF64, M, N)
         Ym = Lsp * Fm * transpose(Lfr)
         @test sum(norm(Ym[i, :], 1.5)^0.7 for i in axes(Ym, 1)) ≈
-              InverseProblems.penalty(Lpq(1.5, 0.7; samples = N), reshape(L15 * vec(Fm), :, 1))
+              SourceEstimation.penalty(Lpq(1.5, 0.7; samples = N), reshape(L15 * vec(Fm), :, 1))
         # use as smoothing operator of a group
         H = randn(40, 35)
         y = H * f
@@ -114,13 +114,13 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
     @testset "Formulations" begin
         @test_throws ArgumentError Additive(Lq(2.0); λ = -1.0)
         @test_throws ArgumentError Additive(Lq(2.0); λ = Heuristic())
-        @test InverseProblems.default_algorithm(Multiplicative(Lq(1.0))) isa IR
-        @test InverseProblems.default_algorithm(Bayesian(Lq(1.0))) isa MAP
+        @test SourceEstimation.default_algorithm(Multiplicative(Lq(1.0))) isa IR
+        @test SourceEstimation.default_algorithm(Bayesian(Lq(1.0))) isa MAP
     end
 
     @testset "Weighted solves" begin
         Random.seed!(0)
-        IP = InverseProblems
+        IP = SourceEstimation
         # every regime × smoothing operator × field, against the explicit formulas
         for T in (Float64, ComplexF64), (nm, nr) in ((12, 8), (8, 8), (5, 8)), ns in (1, 3)
             Lsq = diagm(nr, nr, 0 => fill(2.0, nr), 1 => -ones(nr - 1))       # square invertible
@@ -166,34 +166,34 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         Random.seed!(3)
         H = randn(20, 12)
         y = H * randn(12) .+ 0.1randn(20)
-        c = InverseProblems.linear_cache(InverseProblem(H, y))
+        c = SourceEstimation.linear_cache(InverseProblem(H, y))
         W = rand(12, 1) .+ 0.5
-        Lid = InverseProblems.IdentitySmoothing()
-        Lmat = InverseProblems.MatrixSmoothing(sparse(1.0I, 12, 12))
+        Lid = SourceEstimation.IdentitySmoothing()
+        Lmat = SourceEstimation.MatrixSmoothing(sparse(1.0I, 12, 12))
         # the SVD and generalized SVD paths describe the same problem
         for rule in (LCurve(), GCV(), BayesEstimator())
-            λ1 = InverseProblems.select_parameter(rule, c, Lid, W)
-            λ2 = InverseProblems.select_parameter(rule, c, Lmat, W)
+            λ1 = SourceEstimation.select_parameter(rule, c, Lid, W)
+            λ2 = SourceEstimation.select_parameter(rule, c, Lmat, W)
             @test λ1 > 0
             @test isapprox(λ1, λ2; rtol = 1e-6)
         end
         # 1D refinement: Brent's method, and refined grid search better than the grid alone
-        x, fx = InverseProblems.brent(x -> (x - 0.3)^2 + 1, -2, 3)
+        x, fx = SourceEstimation.brent(x -> (x - 0.3)^2 + 1, -2, 3)
         @test x ≈ 0.3 atol = 1e-7
         @test fx ≈ 1
-        @test InverseProblems.grid_minimize(x -> (x - 0.3)^2 + 1, range(-2, 3; length = 11)) ≈ 0.3 atol = 1e-7
-        sp = InverseProblems.spectrum(c, Lid, W)
-        t = sort(log.(InverseProblems.lambda_grid(sp.γ)))
+        @test SourceEstimation.grid_minimize(x -> (x - 0.3)^2 + 1, range(-2, 3; length = 11)) ≈ 0.3 atol = 1e-7
+        sp = SourceEstimation.spectrum(c, Lid, W)
+        t = sort(log.(SourceEstimation.lambda_grid(sp.γ)))
         for rule in (LCurve(), GCV(), BayesEstimator())
-            J = InverseProblems.criterion(rule, sp, length(y))
-            λ = InverseProblems.select_parameter(rule, sp, length(y))
+            J = SourceEstimation.criterion(rule, sp, length(y))
+            λ = SourceEstimation.select_parameter(rule, sp, length(y))
             @test J(log(λ) / 2) <= minimum(J.(t))
         end
         s = solve(InverseProblem(H, y), Additive(Lq(2.0); λ = BayesEstimator()))
         @test s.λ > 0 && s.converged
         # non-square L: the null space of L is left unregularized
         Dx = diagm(12, 12, 0 => -ones(12), 1 => ones(11))[1:11, :]
-        sp = InverseProblems.spectrum(c, InverseProblems.MatrixSmoothing(sparse(Dx)), ones(11, 1))
+        sp = SourceEstimation.spectrum(c, SourceEstimation.MatrixSmoothing(sparse(Dx)), ones(11, 1))
         @test sp.nfree == 1 && length(sp.γ) == 11
     end
 
@@ -262,7 +262,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
     end
 
     @testset "Operator along the samples Lf (MSSP 2018)" begin
-        IP = InverseProblems
+        IP = SourceEstimation
         Random.seed!(14)
         nm, nr, nf = 14, 10, 8
         Hs = [randn(ComplexF64, nm, nr) for _ in 1:nf]
@@ -270,34 +270,34 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         Y = reduce(hcat, [Hs[j] * U[:, j] for j in 1:nf]) .+ 0.01randn(ComplexF64, nm, nf)
         Lf = diff_operator(nf, 1)
         pb, pv = InverseProblem(Hs, Y), InverseProblem(blockdiag(sparse.(Hs)...), vec(Y))
-        @test IP.sample_coupling(Lpq(2, 0.5; Lf)) isa IP.SmoothedSamples
-        @test IP.sample_coupling(Groups(1:5 => Lq(1.0), 6:10 => Lpq(2, 0.5; Lf))) isa IP.SmoothedSamples
-        @test IP.strategy(pb, Multiplicative(Lpq(2, 0.5; Lf))) isa IP.Assembled
+        @test IP.sample_coupling(Lpq(2, 0.5; Lc = Lf)) isa IP.SmoothedSamples
+        @test IP.sample_coupling(Groups(1:5 => Lq(1.0), 6:10 => Lpq(2, 0.5; Lc = Lf))) isa IP.SmoothedSamples
+        @test IP.strategy(pb, Multiplicative(Lpq(2, 0.5; Lc = Lf))) isa IP.Assembled
         # native Lf = vectorized problem with L = kron(Lf, I)
-        a = solve(pb, Multiplicative(Lpq(2, 0.5; Lf)); init = 1e-2, covariance = true)
-        b = solve(pv, Multiplicative(Lpq(2, 0.5; L = space_sample_operator(nr, nf; samples = Lf), samples = nf));
+        a = solve(pb, Multiplicative(Lpq(2, 0.5; Lc = Lf)); init = 1e-2, covariance = true)
+        b = solve(pv, Multiplicative(Lpq(2, 0.5; L = space_sample_operator(nr, nf; Lc = Lf), samples = nf));
                   init = 1e-2, covariance = true)
         @test vec(a.u) ≈ b.u && a.λ ≈ b.λ && size(a.u) == (nr, nf)
         @test a.covariance ≈ b.covariance && size(posterior_std(a)) == (nr, nf)
         # groups, per-point noise variances
         r = 0.01 .+ rand(nm)
-        a = solve(pb, Multiplicative(Groups(1:5 => Lpq(2, 0.5; Lf), 6:10 => Lq(1.0))); R = r, init = 1e-2)
-        b = solve(pv, Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lpq(2, 0.5; L = space_sample_operator(5, nf; samples = Lf), samples = nf),
+        a = solve(pb, Multiplicative(Groups(1:5 => Lpq(2, 0.5; Lc = Lf), 6:10 => Lq(1.0))); R = r, init = 1e-2)
+        b = solve(pv, Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lpq(2, 0.5; L = space_sample_operator(5, nf; Lc = Lf), samples = nf),
                                             sample_rows(6:10, nr, nf) => Lq(1.0))); R = repeat(r, nf), init = 1e-2)
         @test vec(a.u) ≈ b.u
         # space–time problem (dense convolution matrix), spatial and temporal operators
         nt = 6
         Ht, Yt = randn(nm * nt, nr * nt), randn(nm, nt)
         Lsp, Lt = diff_operator(nr, 2; npts = 5), diff_operator(nt, 1)
-        a = solve(InverseProblem(Ht, Yt), Additive(Lpq(2, 1; L = Lsp, Lf = Lt); λ = 0.1))
+        a = solve(InverseProblem(Ht, Yt), Additive(Lpq(2, 1; L = Lsp, Lc = Lt); λ = 0.1))
         b = solve(InverseProblem(Ht, vec(Yt)),
-                  Additive(Lpq(2, 1; L = space_sample_operator(nr, nt; space = Lsp, samples = Lt), samples = nt); λ = 0.1))
+                  Additive(Lpq(2, 1; L = space_sample_operator(nr, nt; L = Lsp, Lc = Lt), samples = nt); λ = 0.1))
         @test vec(a.u) ≈ b.u
         # errors
-        @test_throws ArgumentError solve(InverseProblem(Hs[1], Y[:, 1]), Multiplicative(Lpq(2, 0.5; Lf)))
-        @test_throws ArgumentError Lpq(2, 0.5; Lf, samples = 3)
-        @test_throws DimensionMismatch solve(pb, Multiplicative(Lpq(2, 0.5; Lf = diff_operator(nf + 1, 1))))
-        @test_throws ArgumentError solve(pv, Multiplicative(Lpq(2, 0.5; Lf)))
+        @test_throws ArgumentError solve(InverseProblem(Hs[1], Y[:, 1]), Multiplicative(Lpq(2, 0.5; Lc = Lf)))
+        @test_throws ArgumentError Lpq(2, 0.5; Lc = Lf, samples = 3)
+        @test_throws DimensionMismatch solve(pb, Multiplicative(Lpq(2, 0.5; Lc = diff_operator(nf + 1, 1))))
+        @test_throws ArgumentError solve(pv, Multiplicative(Lpq(2, 0.5; Lc = Lf)))
         # sparse heuristic on H L⁻¹ (invertible L) = dense heuristic (generalized SVD)
         Hov = randn(ComplexF64, 30, 12)
         S = IP.MatrixSmoothing(sparse(diff_operator(12, 1) + 0.5I))
@@ -307,7 +307,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
     end
 
     @testset "Multiplicative ℓp,q regularization (port of lpq_reg)" begin
-        IP = InverseProblems
+        IP = SourceEstimation
         # direct port of lpq_reg, with the IR weights and the damping rule of the package
         function lpq_reg_ref(A, b, p, q, r)
             S = Diagonal(1 ./ sqrt.(r))
@@ -374,7 +374,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
     end
 
     @testset "Generalized Gaussian priors (real / complex)" begin
-        IP = InverseProblems
+        IP = SourceEstimation
         # real prior ∝ exp(-(τs/q)|v|^q), complex prior ∝ exp(-τs|v|^q): the alternating
         # estimation of (q, τs) recovers the parameters of the sampled distribution
         Random.seed!(8)
@@ -437,7 +437,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
     end
 
     @testset "Frequency-by-frequency resolution" begin
-        IP = InverseProblems
+        IP = SourceEstimation
         @test IP.sample_coupling(Lq(1.0)) isa IP.IndependentSamples
         @test IP.sample_coupling(Lpq(2, 1)) isa IP.CoupledSamples
         @test IP.sample_coupling(Groups(1:2 => Lq(1.0), 3:4 => Lq(2.0))) isa IP.IndependentSamples
@@ -494,7 +494,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         y = vec(Y)
         v = rand(length(y)) .+ 0.5
         ps, pd = InverseProblem(Hb, y), InverseProblem(Matrix(Hb), y)
-        @test ps.H isa InverseProblems.SparseOperator
+        @test ps.H isa SourceEstimation.SparseOperator
         # frequency smoothing L = Lf ⊗ I couples the frequencies
         Lf = kron(diff_operator(nf, 1), sparse(1.0I, nr, nr))
         Hd = Matrix(Hb)
@@ -516,30 +516,30 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test solve(ps, Bayesian(Lq(1.0))).hyper.τn > 0
         # 2-norm condition number estimate, heuristic consistent with the dense one
         A = sparse(Hermitian(Matrix(Hb' * Hb) + 0.1I))
-        @test InverseProblems.condest(A) ≈ cond(Matrix(A)) rtol = 1e-3
-        @test InverseProblems.condest(sparse([1.0 1; 1 1])) == Inf
+        @test SourceEstimation.condest(A) ≈ cond(Matrix(A)) rtol = 1e-3
+        @test SourceEstimation.condest(sparse([1.0 1; 1 1])) == Inf
         Hover = sparse(randn(ComplexF64, 30, 12))
-        cs = InverseProblems.linear_cache(InverseProblem(Hover, randn(ComplexF64, 30)))
-        cd = InverseProblems.linear_cache(InverseProblem(Matrix(Hover), randn(ComplexF64, 30)))
+        cs = SourceEstimation.linear_cache(InverseProblem(Hover, randn(ComplexF64, 30)))
+        cd = SourceEstimation.linear_cache(InverseProblem(Matrix(Hover), randn(ComplexF64, 30)))
         W = ones(12, 1)
-        @test InverseProblems.select_parameter(Heuristic(), cs, InverseProblems.IdentitySmoothing(), W) ≈
-              InverseProblems.select_parameter(Heuristic(), cd, InverseProblems.IdentitySmoothing(), W) rtol = 1e-2
+        @test SourceEstimation.select_parameter(Heuristic(), cs, SourceEstimation.IdentitySmoothing(), W) ≈
+              SourceEstimation.select_parameter(Heuristic(), cd, SourceEstimation.IdentitySmoothing(), W) rtol = 1e-2
         # mixed norm on the vectorized problem: same model as the space–frequency problem
         pb = InverseProblem(Hs, Y)
         a = solve(pb, Multiplicative(Lpq(2, 0.5)); init = 1e-2)
         b = solve(ps, Multiplicative(Lpq(2, 0.5; samples = nf)); init = 1e-2)
         @test vec(a.u) ≈ b.u && a.λ ≈ b.λ && a.iterations == b.iterations
-        @test InverseProblems.penalty(Lpq(2, 0.5; samples = nf), reshape(vec(U), :, 1)) ≈
-              InverseProblems.penalty(Lpq(2, 0.5), U)
+        @test SourceEstimation.penalty(Lpq(2, 0.5; samples = nf), reshape(vec(U), :, 1)) ≈
+              SourceEstimation.penalty(Lpq(2, 0.5), U)
         @test_throws ArgumentError solve(ps, Multiplicative(Lpq(2, 0.5)); init = 1e-2)
         # groups of a vectorized problem, mixed norm combined with a frequency smoothing
         Ls = diff_operator(nf, 1)
         f = Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lpq(2, 0.5; samples = nf),
-                                  sample_rows(6:10, nr, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; samples = Ls),
+                                  sample_rows(6:10, nr, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; Lc = Ls),
                                                                    samples = size(Ls, 1))))
         @test solve(ps, f).converged
         @test_throws DimensionMismatch solve(ps, Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lq(1.0),
-            sample_rows(6:10, nr, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; samples = Ls), samples = 3))))
+            sample_rows(6:10, nr, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; Lc = Ls), samples = 3))))
         # SVD-based parameter choice rules are not available
         @test_throws ArgumentError solve(ps, Additive(Lq(1.0); λ = LCurve()))
         @test_throws ArgumentError solve(ps, Multiplicative(Lq(1.0)); init = GCV())

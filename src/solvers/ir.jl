@@ -156,7 +156,7 @@ Setup shared by all solvers: linear cache of the problem whitened by the noise c
 """
 function setup(prob::InverseProblem, prior::RegularizationTerm, R)
     has_sample_operator(prior) &&
-        throw(ArgumentError("an operator along the samples (Lf) requires a space–frequency or space–time problem " *
+        throw(ArgumentError("an operator on the columns (Lc) requires a space–frequency or space–time problem " *
                             "with a matrix of data; for a vectorized problem, use `L = space_sample_operator(…)` and `samples`"))
     c = linear_cache(prob, R)
     reg = Regularization(groups(prior, c.nr), c.nr)

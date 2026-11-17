@@ -79,17 +79,19 @@ function reweight!(W, t::Lq, V, ε)
     return penalty(t, V)
 end
 
+# W is filled in place: `W` is a view on the rows of the group (see the method on `Regularization`), and `Wm` is that view or, for a vectorized problem, a reshaped view of it (no copy). `@.` turns the assignment into `Wm[i, :] .= …`, which writes into `W`. Weights of the first-order optimality condition, ∂R/∂v̄ᵢⱼ = Wᵢⱼ vᵢⱼ with R = Σᵢ Sᵢ^(q/p), Sᵢ = Σⱼ |vᵢⱼ|^p:  Wᵢⱼ = (q/2) max(ε^p, Sᵢ)^(q/p − 1) · max(ε, |vᵢⱼ|)^(p − 2).
 function reweight!(W, t::Lpq, V, ε)
     p, q = t.p, t.q
     Vm, Wm = mixed_layout(t, V), mixed_layout(t, W)
     for i in axes(Vm, 1)
         row = view(Vm, i, :)
-        ws = (q / 2) * max(ε^p, sum(x -> abs(x)^p, row))^(q / p - 1)
-        @. Wm[i, :] = ws * max(ε, abs(row))^(p - 2)
+        ws = (q / 2) * max(ε^p, sum(x -> abs(x)^p, row))^(q / p - 1)   # weight of row i
+        @. Wm[i, :] = ws * max(ε, abs(row))^(p - 2)                     # × element weights
     end
-    return penalty(t, V)
+    return penalty(t, V) # the penalty R_g is returned; W has been filled in place
 end
 
+# Fills W (size of L U) group by group, through views on the rows of each group, and the group penalties P. The returned (W, P) are the arrays given as input.
 function reweight!(W, P, R::Regularization, V, ε)
     for g in eachindex(R.terms)
         rows = R.rows[g]

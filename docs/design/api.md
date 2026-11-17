@@ -1,4 +1,4 @@
-# InverseProblems.jl — conception de l'API
+# SourceEstimation.jl — conception de l'API
 
 ## Principe
 
@@ -36,23 +36,78 @@ Le branchement à l'exécution n'est utilisé que pour la validation des argumen
 | matrice `nm·nt × nr·nt`              | matrice `nm×nt` | matrice `nr×nt`| espace–temps       |
 | matrice **creuse** (`SparseOperator`) | vecteur ou matrice | idem      | problème assemblé (p. ex. espace–fréquence vectorisé, fréquences couplées) |
 
-Les **lignes** de l'inconnue sont toujours les points de reconstruction : `Groups`, `L` et
-`Lpq` ont donc le même sens quel que soit le domaine (`L` agit sur la dimension spatiale).
+Les **lignes** de l'inconnue sont toujours les points de reconstruction et les **colonnes**
+les fréquences ou instants : `Groups`, `L` (opérateur sur les lignes), `Lc` (opérateur sur
+les colonnes) et `Lpq` ont donc le même sens quel que soit le domaine.
 
 ## Termes de régularisation (= lois a priori)
 
 * `Lq(q; L = I)` — `‖L u‖_q^q`, `0 < q ≤ 2` ;
-* `Lpq(p, q; L = I, Lf = nothing, samples = nothing)` — `‖L U Lfᵀ‖_{p,q}^q =
-  Σᵢ (Σⱼ |(L U Lfᵀ)ᵢⱼ|^p)^(q/p)` : `q` sur l'espace, `p` sur la fréquence/le temps (MSSP 2018,
-  éq. 10–15). `L` agit sur l'espace, `Lf` le long des fréquences/instants (p. ex.
-  `Lf = diff_operator(nf, 1; h = Δf)`, éq. 11, pour la continuité des spectres) ; l'opérateur
-  global est `kron(Lf, L)` (éq. 15). `samples` sert aux problèmes déjà vectorisés (voir plus
-  bas) et ne se combine pas avec `Lf` ;
+* `Lpq(p, q; L = I, Lc = nothing, samples = nothing)` — `‖L U Lcᵀ‖_{p,q}^q =
+  Σᵢ (Σⱼ |(L U Lcᵀ)ᵢⱼ|^p)^(q/p)` : `q` sur les lignes (espace), `p` sur les colonnes
+  (fréquence/temps) (MSSP 2018, éq. 10–15). `L` agit sur les lignes (`Ls` de l'article),
+  `Lc` sur les colonnes (`Lf` de l'article ; p. ex. `Lc = diff_operator(nf, 1; h = Δf)`,
+  éq. 11, pour la continuité des spectres) ; l'opérateur global est `kron(Lc, L)` (éq. 15).
+  `samples` sert aux problèmes déjà vectorisés (voir plus bas) et ne se combine pas avec `Lc` ;
 * `Groups(rows₁ => Lq(0.5), rows₂ => Lq(2.0; L = D₂))` — régularisation par régions ;
-  chaque groupe a sa propre matrice `L_g` (`size(L_g, 2) == length(rows_g)`), l'identité par défaut.
+  chaque groupe a son propre opérateur `L` (`size(L, 2) == length(rows_g)`), l'identité par défaut.
 
 Les `L_g` sont assemblés une fois en un opérateur global creux ; si tous sont l'identité,
 le chemin diagonal rapide est conservé.
+
+### Correspondance de `Lpq(…; L, Lc)` avec MSSP 2018 (éq. 14–15)
+
+Dans cette section, on garde les notations de l'article : `Ls` (opérateur spatial) est le
+`L` du paquet et `Lf` (opérateur fréquentiel) son `Lc`.
+
+`Lpq(p, q; L = Ls, Lc = Lf)` régularise `‖Ls U Lfᵀ‖_{p,q}^q = Σᵢ (Σⱼ |(Ls U Lfᵀ)ᵢⱼ|^p)^(q/p)`.
+C'est exactement le terme `R(F̄) = ‖L̄ F̄‖_{p,q}^q` de l'article, pour deux raisons : l'ordre
+d'empilement de `F̄` et l'identité de Kronecker `(A ⊗ B) vec(X) = vec(B X Aᵀ)`.
+
+**1. Disposition de `F̄`.** Le vecteur global de l'éq. (4) empile les champs fréquence par
+fréquence, `F̄ = [F(f₁); …; F(f_N)]`. Si `F` est la matrice `M × N` de l'éq. (16) (points en
+lignes, fréquences en colonnes), `F(f_j)` est sa colonne `j` et `F̄ = vec(F)` (colonne par
+colonne). C'est la convention du paquet : `U` de taille `nr × ns`, `u = vec(U)`.
+
+**2. Opérateurs globaux de l'éq. (15).**
+
+* Opérateur spatial : `L̄s = I_N ⊗ Ls` (`Ls` appliqué à chaque bloc fréquentiel), soit
+  `L̄s vec(X) = vec(Ls X)`.
+* Opérateur fréquentiel : l'article ne donne pas `L̄f` explicitement, mais d'après l'éq. (10)
+  il doit appliquer `Lf` au spectre `F̄[i, :]` de chaque point, c'est-à-dire à chaque **ligne**
+  de `F`. Dans l'ordre de `vec(F)`, la seule écriture possible est `L̄f = Lf ⊗ I_M`, soit
+  `L̄f vec(F) = vec(F Lfᵀ)` : la ligne `i` de `F Lfᵀ` est `Lf` appliqué au spectre du point `i`.
+  C'est aussi le `L` construit par le script Matlab avec `lissage_freq = 1`.
+* Composition : `L̄ F̄ = (I_N ⊗ Ls)(Lf ⊗ I_M) vec(F) = vec(Ls F Lfᵀ)`, soit
+  `L̄ = Lf ⊗ Ls` (règle du produit mixte). Les deux opérateurs commutent : l'ordre
+  « espace puis fréquence » de l'éq. (15) est indifférent.
+
+**3. Norme de l'éq. (14).** `R(F̄) = Σᵢ ‖(L̄F̄)[i, :]‖_p^q`, où `(L̄F̄)[i, :]` est le groupe
+fréquentiel du point `i` (par analogie avec l'éq. (8)), c'est-à-dire la ligne `i` de
+`Y = Ls F Lfᵀ`. Donc
+
+    R(F̄) = Σᵢ (Σⱼ |Yᵢⱼ|^p)^(q/p) = ‖Ls F Lfᵀ‖_{p,q}^q
+
+par la définition (1) de la norme mixte élevée à la puissance `q`. Les rôles sont ceux de
+l'article : `p` est l'exposant intérieur (fréquences), `q` l'exposant extérieur (espace).
+
+**4. Dans le code.** `space_sample_operator(M, N; L = Ls, Lc = Lf)` construit
+`kron(Lf, Ls)`, c'est-à-dire `L̄` de l'éq. (15). `Lpq(…; samples)` replie `L̄F̄` colonne par
+colonne en une matrice `size(Ls, 1) × size(Lf, 1)`, ce qui redonne `Ls F Lfᵀ`, puis calcule la
+norme sur ses lignes. Avec `Lc` natif, le problème est vectorisé automatiquement selon ce
+schéma. Le test « space–frequency operator of MSSP 2018 » vérifie numériquement que le `Lf` de
+l'éq. (11) coïncide avec `diff_operator(N, 1; h = Δf)`, que `(I_N ⊗ Ls)(Lf ⊗ I_M)` coïncide
+avec `space_sample_operator(…)`, et que `Σᵢ ‖(Ls F Lfᵀ)[i, :]‖_p^q` coïncide avec la pénalité
+calculée par le paquet.
+
+**Précisions.**
+
+* L'indice `I = j + N(i − 1)` de l'éq. (20) range les poids **point par point** (fréquences
+  les plus rapides), alors que `F̄` est rangé fréquence par fréquence. C'est seulement une
+  numérotation des coefficients de `W̄` : elle ne change rien à `R(F̄)`, et le paquet n'en a pas
+  besoin puisqu'il calcule les poids directement sur la matrice `Ls F Lfᵀ`.
+* Avec le `Lf` carré de l'éq. (11), `Ls F Lfᵀ` a `N` colonnes ; avec un schéma réduit (p. ex.
+  différences avant, `(N − 1) × N`), elle en a `N − 1`. C'est pourquoi `samples = size(Lf, 1)`.
 
 ### Opérateurs de lissage (différences finies)
 
@@ -76,11 +131,11 @@ Groups(inner => Lq(0.5),
 Lq(2.0; L = [diff_operator(coords, 1); diff_operator(coords, 2)])   # gradient
 ```
 
-* `space_sample_operator(nr, ns; space = I, samples = I)` — opérateur d'un problème
+* `space_sample_operator(nr, ns; L = I, Lc = I)` — opérateur d'un problème
   **vectorisé** espace–fréquence ou espace–temps (`u = vec(U)`, `U` : `nr × ns`, colonnes =
-  fréquences ou instants) : `L = kron(samples, space)`, soit
-  `L vec(U) = vec(space · U · samplesᵀ)`. `samples = Ls` seul : lissage le long des
-  fréquences/instants en chaque point (le `L` de `lissage_freq`) ; `space = Lx` seul :
+  fréquences ou instants) : `L = kron(Lc, L)`, soit
+  `L vec(U) = vec(L · U · Lcᵀ)`. `Lc = Lf` seul : lissage le long des
+  fréquences/instants en chaque point (le `L` de `lissage_freq`) ; `L = Lx` seul :
   lissage spatial à chaque fréquence/instant ; les deux : produit (dérivée croisée). Pour
   une somme de pénalités, empiler les opérateurs (`[L₁; L₂]`) ;
 * `sample_rows(rows, nr, ns)` — indices des points `rows` à toutes les fréquences/instants
@@ -88,7 +143,7 @@ Lq(2.0; L = [diff_operator(coords, 1); diff_operator(coords, 2)])   # gradient
   vectorisé ; l'opérateur du groupe est alors `space_sample_operator(length(rows), ns; …)`.
 
 Dans un problème espace–fréquence ou espace–temps (données matricielles), l'opérateur le
-long des fréquences ou du temps se donne directement par `Lpq(…; Lf)` : le problème est
+long des fréquences ou du temps se donne directement par `Lpq(…; Lc = Lf)` : le problème est
 alors assemblé automatiquement (voir « Stratégie de résolution »). `space_sample_operator`
 et `sample_rows` servent aux problèmes que l'on vectorise soi-même.
 
@@ -98,15 +153,15 @@ Le mot-clé `samples` donne le nombre de colonnes de `L u` ; le vecteur du group
 colonne par colonne (points les plus rapides, comme `vec(U)`, `space_sample_operator` et
 `sample_rows`) avant le calcul de la norme mixte :
 
-| `L` du groupe | `samples` |
+| `L` du groupe (problème vectorisé) | `samples` |
 |:--|:--|
 | `I` | `ns` |
-| `space_sample_operator(n, ns; space = Lx)` | `ns` |
-| `space_sample_operator(n, ns; samples = Ls)` (± `space`) | `size(Ls, 1)` |
+| `space_sample_operator(n, ns; L = Lx)` | `ns` |
+| `space_sample_operator(n, ns; Lc = Ls)` (± `L`) | `size(Ls, 1)` |
 
 ```julia
 Groups(sample_rows(inner, nr, nf) => Lpq(2, 0.5; samples = nf),
-       sample_rows(edges, nr, nf) => Lpq(2, 1; L = space_sample_operator(length(edges), nf; samples = Ls),
+       sample_rows(edges, nr, nf) => Lpq(2, 1; L = space_sample_operator(length(edges), nf; Lc = Ls),
                                          samples = size(Ls, 1)))
 ```
 
@@ -230,18 +285,18 @@ dispatch sur les termes de régularisation (`sample_coupling`), comme dans les a
 | termes de régularisation | stratégie |
 |:--|:--|
 | `Lq` uniquement (éventuellement en `Groups`) | **fréquence par fréquence** : chaque fréquence est un problème indépendant, avec ses propres paramètres de régularisation, hyperparamètres et critère d'arrêt, résolu en parallèle |
-| au moins un `Lpq` (sans `Lf`) | **problème espace–fréquence couplé, résolu bloc par bloc** : la norme mixte couple les fréquences par les poids seulement, les systèmes linéaires restent bloc-diagonaux (MSSP 2018 avec `L = I`, MSSP 2020) |
-| au moins un `Lpq` avec `Lf` | **problème assemblé** : l'opérateur `kron(Lf, L)` couple les fréquences dans les systèmes linéaires (bloc-tridiagonaux pour un `Lf` à 3 points) ; le problème est vectorisé automatiquement (`H` bloc-diagonal creux, groupes `sample_rows`, opérateurs `space_sample_operator`, `samples = size(Lf, 1)`) et résolu par Cholesky creux (MSSP 2018, éq. 10–18) |
+| au moins un `Lpq` (sans `Lc`) | **problème espace–fréquence couplé, résolu bloc par bloc** : la norme mixte couple les fréquences par les poids seulement, les systèmes linéaires restent bloc-diagonaux (MSSP 2018 avec `L = Lc = I`, MSSP 2020) |
+| au moins un `Lpq` avec `Lc` | **problème assemblé** : l'opérateur `kron(Lc, L)` couple les fréquences dans les systèmes linéaires (bloc-tridiagonaux pour un `Lc` à 3 points) ; le problème est vectorisé automatiquement (`H` bloc-diagonal creux, groupes `sample_rows`, opérateurs `space_sample_operator`, `samples = size(Lc, 1)`) et résolu par Cholesky creux (MSSP 2018, éq. 10–18) |
 
 Le problème assemblé est aussi utilisé pour un problème espace–temps (matrice de convolution
-dense) dont un terme a un `Lf` (lissage temporel, MSSP 2018 §7). Le résultat a la disposition
+dense) dont un terme a un `Lc` (lissage temporel, MSSP 2018 §7). Le résultat a la disposition
 habituelle (`u` : `nr × ns`) ; la covariance a posteriori est alors une matrice
-`(nr·ns) × (nr·ns)` (les fréquences sont couplées). `Lf` sur un problème à une seule
+`(nr·ns) × (nr·ns)` (les fréquences sont couplées). `Lc` sur un problème à une seule
 fréquence, ou sur un problème déjà vectorisé, lève une `ArgumentError`.
 
 ```julia
 Lf  = diff_operator(nf, 1; h = Δf)                                    # éq. (11)
-sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5; Lf)))   # éq. (18) avec L = Lf ⊗ I
+sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5; Lc = Lf)))   # éq. (18) avec L̄ = Lf ⊗ I
 ```
 
 Il n'y a pas de couplage possible avec `Lq` seul pour un problème espace–fréquence. Pour
@@ -278,6 +333,50 @@ matrices `nr × nr`.
 sol = solve(InverseProblem(Hs, Y), Multiplicative(Lq(0.5)); R = σ²)   # un α par fréquence
 sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)))       # problème couplé
 ```
+
+### Mise en œuvre de la résolution espace–fréquence et espace–temps
+
+La boucle IR est la même dans tous les cas (poids → paramètre de régularisation → résolution
+linéaire) ; ce qui change, par dispatch, c'est la façon de stocker le problème et de résoudre
+les systèmes linéaires.
+
+**Disposition commune.** L'inconnue est une matrice `U` de taille `nr × ns` (lignes = points,
+colonnes = fréquences ou instants) et `V = L U Lcᵀ`. Les poids IR de `Lpq` sont calculés ligne
+par ligne sur `V` (exposant `p` sur les colonnes, `q` sur les lignes) : c'est ainsi que la
+norme mixte couple les fréquences.
+
+| Cas | Stratégie | Ce qui est résolu |
+|:--|:--|:--|
+| Espace–fréquence, `Lq` seul | `PerSample` | un problème indépendant par fréquence, en parallèle, chacun avec son α ou λ et sa convergence |
+| Espace–fréquence, `Lpq` sans `Lc` | `Joint` (`BlockCache`) | un seul problème : poids et α calculés sur toutes les fréquences, mais `HᴴH + D` reste bloc-diagonal (`D` diagonale), donc chaque fréquence est résolue séparément et en parallèle |
+| Espace–temps (`H` dense), sans `Lc` | `Joint` (`DenseCache`) | un système dense de taille `nr·nt`, avec l'opérateur global `kron(I, L)` |
+| Espace–fréquence ou espace–temps, `Lpq` avec `Lc` | `Assembled` | le problème est vectorisé automatiquement, puis résolu comme un problème creux couplé |
+
+**Cas `Assembled`.** `u = vec(U)`, `y = vec(Y)` ; `H` devient `blockdiag(sparse.(Hs)...)` en
+espace–fréquence ou reste la matrice de convolution en espace–temps ; chaque groupe devient
+`sample_rows(rows, nr, ns)` avec l'opérateur `kron(Lc, L)` et `samples = size(Lc, 1)`. Le
+système `HᴴH + kron(Lc, L)ᴴ D kron(Lc, L)` est tridiagonal par blocs ; il est résolu par
+Cholesky creux en espace–fréquence et par le chemin dense en espace–temps.
+
+**Résolutions linéaires selon le régime.** Dans les caches denses, chaque bloc de fréquence
+passe par les équations normales si `nm ≥ nr`, et par Woodbury si `nm < nr` (y compris avec un
+`L` carré inversible) ; un `L` rectangulaire impose les équations normales. Dans le cas creux,
+on utilise CHOLMOD en réutilisant l'analyse symbolique.
+
+Sans `Lc`, la structure bloc-diagonale est donc toujours exploitée et le couplage entre
+fréquences ne passe que par les poids ; avec `Lc`, le couplage entre aussi dans les systèmes
+linéaires, et l'on bascule automatiquement vers la résolution creuse assemblée.
+
+**Poids IR de `Lpq` (`reweight!`).** `reweight!` ne renvoie pas `W` : il le remplit **en
+place** et renvoie la pénalité `R_g`. `reweighting` alloue `W` une fois (taille de `L U`), la
+méthode par groupes passe à chaque terme une vue `view(W, rows, :)` sur les lignes du groupe,
+et `mixed_layout` renvoie cette vue telle quelle (inconnue matricielle) ou une vue repliée
+`reshape(vue, :, samples)` (problème vectorisé) — sans copie dans les deux cas. L'écriture
+`@. Wm[i, :] = …` devient `Wm[i, :] .= …` et remplit donc directement `W`, avec les poids de la
+condition d'optimalité (`∂R/∂v̄ᵢⱼ = Wᵢⱼ vᵢⱼ`, `R = Σᵢ Sᵢ^{q/p}`, `Sᵢ = Σⱼ |vᵢⱼ|^p`) :
+
+    Wᵢⱼ = (q/2) · max(ε^p, Sᵢ)^(q/p − 1) · max(ε, |vᵢⱼ|)^(p − 2)
+          └──── poids de la ligne i ────┘   └─ poids de l'élément ─┘
 
 ## Mots-clés communs de `solve`
 
@@ -327,7 +426,7 @@ disponibles pour les calculs ponctuels.
 
 ```
 src/
-├── InverseProblems.jl      # module : include et export regroupés fichier par fichier
+├── SourceEstimation.jl      # module : include et export regroupés fichier par fichier
 ├── types/                  # définitions de types (API publique)
 │   ├── problem.jl          # opérateurs directs (dense, bloc-diagonal), InverseProblem
 │   ├── priors.jl           # termes de régularisation : Lq, Lpq, Groups
@@ -362,7 +461,7 @@ src/
 * `solvers/` contient une méthode de `solve_joint` par couple (formulation, algorithme), `strategy.jl` le `solve` public : un nouvel
   algorithme (p. ex. `Gibbs` pour l'inférence bayésienne complète) se branche en ajoutant un
   type dans `types/algorithms.jl` et un fichier dans `solvers/`.
-* Dans `InverseProblems.jl`, chaque `include` est suivi des `export` qu'il fournit ; l'ordre
+* Dans `SourceEstimation.jl`, chaque `include` est suivi des `export` qu'il fournit ; l'ordre
   des `include` respecte les dépendances (types → utils → solvers).
 
 ## Retiré

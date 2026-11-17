@@ -1,10 +1,10 @@
-# InverseProblems.jl
+# SourceEstimation.jl
 
 [![Generic badge](https://img.shields.io/badge/Version-0.1.0-cornflowerblue.svg)]()
 [![MIT License](https://img.shields.io/badge/License-MIT-forestgreen)](LICENSE)
 [![DispatchDoctor](https://img.shields.io/badge/%F0%9F%A9%BA_tested_with-DispatchDoctor.jl-blue?labelColor=white)](https://github.com/MilesCranmer/DispatchDoctor.jl)
 
-`InverseProblems.jl` is a Julia package designed to solve regularized linear inverse problems of the form `y = H u + n` in the time and frequency domains. It is primarily intended for force reconstruction and source identification in structural dynamics and acoustics, but it can be used for any linear inverse problem. This package can be used for educational and research purposes. As a teacher, you can use it to illustrate regularization theory and its practical implementation. As a researcher, you can use it to compare regularization strategies on your own data.
+`SourceEstimation.jl` is a Julia package designed to solve regularized linear inverse problems of the form `y = H u + n` in the time and frequency domains. It is primarily intended for force reconstruction and source identification in structural dynamics and acoustics, but it can be used for any linear inverse problem. This package can be used for educational and research purposes. As a teacher, you can use it to illustrate regularization theory and its practical implementation. As a researcher, you can use it to compare regularization strategies on your own data.
 
 > [!WARNING]
 > The package is under active development and is developed as part of my research activities on source identification in structural dynamics and acoustics.
@@ -78,7 +78,7 @@ The package provides the following features:
 ## Quick start
 
 ```julia
-using InverseProblems
+using SourceEstimation
 
 prob = InverseProblem(H, y)                     # H: matrix, y: vector
 
@@ -93,7 +93,7 @@ sol = solve(InverseProblem(Hs, Y), Multiplicative(Lq(0.5)))       # Lq: frequenc
 sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)))   # mixed norm: coupled problem
 
 # Mixed norm with an operator along the frequencies (MSSP 2018): the problem is assembled
-sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5; Lf = diff_operator(nf, 1; h = Δf))))
+sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5; Lc = diff_operator(nf, 1; h = Δf))))
 
 # Known diagonal noise covariance, posterior covariance and credible intervals
 sol = solve(prob, Bayesian(Lq(1.0)); R = σ², covariance = true)

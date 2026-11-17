@@ -1,5 +1,5 @@
 """
-    InverseProblems
+    SourceEstimation
 
 Regularized resolution of linear inverse problems `y = H u + n` in the time and
 frequency domains (force reconstruction, source identification, …).
@@ -21,7 +21,7 @@ sol.u                                               # reconstructed field
 * Algorithms:       [`IR`](@ref), [`MAP`](@ref)
 * Result:           [`InverseSolution`](@ref)
 """
-module InverseProblems
+module SourceEstimation
 
 using LinearAlgebra
 using Random: Random, AbstractRNG

@@ -3,7 +3,7 @@
 # A space–frequency problem regularized with Lq terms only is solved frequency by frequency
 # (the papers treat each frequency independently); with at least one mixed norm Lpq, the
 # frequencies are coupled through the weights and the problem is solved as a whole, block by
-# block. With an operator along the samples (Lpq with Lf, MSSP 2018), the samples are coupled
+# block. With an operator on the columns (Lpq with Lc, Lf in MSSP 2018), the samples are coupled
 # in the linear systems: the space–frequency or space–time problem is assembled (vectorized,
 # sparse block-diagonal H for space–frequency problems) and solved as a whole.
 # Single-frequency problems are always solved as a whole.
@@ -17,7 +17,7 @@ struct IndependentSamples <: SampleCoupling end
 """At least one mixed norm `Lpq`: the samples are coupled through the weights."""
 struct CoupledSamples <: SampleCoupling end
 
-"""At least one operator along the samples (`Lpq` with `Lf`): the samples are coupled in the
+"""At least one operator along the samples (`Lpq` with `Lc`): the samples are coupled in the
 linear systems."""
 struct SmoothedSamples <: SampleCoupling end
 
@@ -31,7 +31,7 @@ Coupling of the samples induced by a regularization term (dispatch on its type).
 
 **Outputs**
 - `c` - `IndependentSamples()` (`Lq` terms only), `CoupledSamples()` (at least one `Lpq`
-  term) or `SmoothedSamples()` (at least one `Lpq` term with `Lf`)
+  term) or `SmoothedSamples()` (at least one `Lpq` term with `Lc`)
 """
 sample_coupling(::Lq) = IndependentSamples()
 sample_coupling(::Lpq) = CoupledSamples()
@@ -139,24 +139,24 @@ end
 #
 # The problem is vectorized: u = vec(U), y = vec(Y), H block-diagonal (sparse) for a
 # space–frequency problem or the space–time convolution matrix; each group g of rows r_g becomes
-# the group sample_rows(r_g, nr, ns) with the operator kron(Lf_g, L_g) and a mixed norm on the
-# (size(L_g, 1) × size(Lf_g, 1)) matrix L_g U_g Lf_gᵀ.
+# the group sample_rows(r_g, nr, ns) with the operator kron(Lc_g, L_g) and a mixed norm on the
+# (size(L_g, 1) × size(Lc_g, 1)) matrix L_g U_g Lc_gᵀ.
 
 assembled_operator(op::BlockDiagonalOperator) = blockdiag(sparse.(op.blocks)...)
 assembled_operator(op::DenseOperator) = op.H
 
 # kron(samples, space), kept as I when both are the identity
-vectorized_operator(space::UniformScaling, ::Nothing, n, ns) =
-    is_identity(space) ? I : space_sample_operator(n, ns; space)
-vectorized_operator(space, ::Nothing, n, ns) = space_sample_operator(n, ns; space)
-vectorized_operator(space, Lf::AbstractMatrix, n, ns) = space_sample_operator(n, ns; space, samples = Lf)
+vectorized_operator(L::UniformScaling, ::Nothing, n, ns) =
+    is_identity(L) ? I : space_sample_operator(n, ns; L)
+vectorized_operator(L, ::Nothing, n, ns) = space_sample_operator(n, ns; L)
+vectorized_operator(L, Lc::AbstractMatrix, n, ns) = space_sample_operator(n, ns; L, Lc)
 
 sample_count(::Nothing, ns) = ns
-sample_count(Lf::AbstractMatrix, ns) = size(Lf, 1)
+sample_count(Lc::AbstractMatrix, ns) = size(Lc, 1)
 
 vectorized(t::Lq, n, ns) = Lq(t.q; L = vectorized_operator(t.L, nothing, n, ns))
 vectorized(t::Lpq, n, ns) =
-    Lpq(t.p, t.q; L = vectorized_operator(t.L, t.Lf, n, ns), samples = sample_count(t.Lf, ns))
+    Lpq(t.p, t.q; L = vectorized_operator(t.L, t.Lc, n, ns), samples = sample_count(t.Lc, ns))
 
 function vectorized(prior::RegularizationTerm, nr, ns)
     G = groups(prior, nr)
@@ -170,7 +170,7 @@ with_prior(f::Bayesian, prior) = Bayesian(prior, f.τn, f.τs, f.q, f.shape_boun
 
 function solve_strategy(::Assembled, prob, f, alg; R = nothing, kwargs...)
     nr, ns = unknown_size(prob)
-    ns > 1 || throw(ArgumentError("an operator along the samples (Lf) requires several frequencies or time samples"))
+    ns > 1 || throw(ArgumentError("an operator along the samples (Lc) requires several frequencies or time samples"))
     σ2 = noise_variances(R, prob.y)
     pv = InverseProblem(assembled_operator(prob.H), vec(prob.y))
     sol = solve_joint(pv, with_prior(f, vectorized(f.prior, nr, ns)), alg;
