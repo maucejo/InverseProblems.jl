@@ -3,33 +3,63 @@
 """
     posterior_std(sol)
 
-Posterior standard deviation of each entry of the solution, from the diagonal of the posterior covariance.
+Posterior standard deviation of each entry of the solution: square root of the diagonal of
+the posterior covariance `Q⁻¹`, obtained from its diagonal blocks (block solves, see
+[`posterior_covariance`](@ref)) — `Q⁻¹` is never formed.
 
 **Inputs**
-- `sol` - `InverseSolution`: solution obtained with `solve(...; covariance = true)`
+- `sol` - `InverseSolution`: solution obtained with `solve(...; precision = true)`
 
 **Outputs**
 - `σ` - `Array{<:Real}`: standard deviations, with the layout of `sol.u`
 """
-posterior_std(sol::InverseSolution) = marginal_std(sol.covariance, sol.u)
+posterior_std(sol::InverseSolution) =
+    reshape(reduce(vcat, [sqrt.(real(diag(B))) for B in marginal_covariances(posterior_model(sol))]), size(sol.u))
 
-marginal_std(::Nothing, u) =
-    throw(ArgumentError("no posterior covariance: call `solve` with `covariance = true`"))
-marginal_std(Σ::AbstractMatrix, u) = reshape(sqrt.(real(diag(Σ))), size(u))
-marginal_std(Σ::AbstractVector{<:AbstractMatrix}, u) =
-    reduce(hcat, [sqrt.(real(diag(S))) for S in Σ])
+"""
+    posterior_covariance(sol; full = false)
+
+Posterior covariance `Q⁻¹` of the solution, computed from the factorization of the precision.
+
+* `full = false`: marginal covariances of the samples (frequencies or time steps), i.e. the
+  `nr × nr` diagonal blocks `Σ_jj` of the covariance of `vec(u)`. Each block is obtained by
+  applying `A⁻¹` to the `nr` corresponding columns of the identity (block solves with the
+  factorization of the solver: normal equations, Woodbury identity, sparse Cholesky), so that
+  the `n × n` covariance is never formed;
+* `full = true`: covariance of `vec(u)`, `(nr·ns) × (nr·ns)`, with the correlations between
+  samples (sparse block-diagonal matrix when the samples are independent or block-diagonal).
+
+**Inputs**
+- `sol` - `InverseSolution`: solution obtained with `solve(...; precision = true)`
+- `full` - `Bool`: full covariance instead of the marginal blocks
+
+**Outputs**
+- `Σ` - `Hermitian` (single sample, or `full = true`), `Vector{<:Hermitian}` (one block per
+  sample) or `SparseMatrixCSC` (`full = true`, independent samples)
+"""
+function posterior_covariance(sol::InverseSolution; full::Bool = false)
+    P = posterior_model(sol)
+    full && return full_covariance(P)
+    blocks = marginal_covariances(P)
+    return length(blocks) == 1 ? only(blocks) : blocks
+end
 
 """
     posterior_samples(sol, nsamples = 10_000; rng = Random.default_rng())
 
-Samples of the Gaussian approximation of the posterior `N(μ, Σ)` (circular complex normal for complex unknowns), with `μ = sol.u`:
+Samples of the Gaussian approximation of the posterior `N(u, Q⁻¹)` (circular complex normal
+for complex unknowns), drawn by **perturbation–optimization**: with `A = Hᴴ H + Lᴴ D L`
+(`Q = τn A`) and `ε₁ ~ N(0, I)`, `ε₂ ~ N(0, I)` of the sizes of the data and of `L u`,
 
-    u_sample = μ + S z,   Σ = S Sᴴ (Cholesky),   z ~ randn(eltype(μ))
+    u_sample = u + A⁻¹ (Hᴴ ε₁ + Lᴴ D^{1/2} ε₂) / √τn,
 
-For block-diagonal operators, each sample (frequency) is drawn from its own `nr × nr` covariance.
+whose covariance is `A⁻¹ (Hᴴ H + Lᴴ D L) A⁻¹ / τn = Q⁻¹`. Each sample costs one application of
+`A⁻¹` with the factorization of the solver (normal equations, Woodbury identity, sparse
+Cholesky, block by block), without factorizing `Q` nor forming `Q⁻¹`; the joint samples keep
+the correlations between frequencies or time steps.
 
 **Inputs**
-- `sol` - `InverseSolution`: solution obtained with `solve(...; covariance = true)`
+- `sol` - `InverseSolution`: solution obtained with `solve(...; precision = true)`
 - `nsamples` - `Integer`: number of samples
 - `rng` - `AbstractRNG`: random number generator
 
@@ -39,28 +69,13 @@ For block-diagonal operators, each sample (frequency) is drawn from its own `nr 
 function posterior_samples(sol::InverseSolution, nsamples::Integer = 10_000;
                            rng::AbstractRNG = Random.default_rng())
     nsamples >= 1 || throw(ArgumentError("nsamples must be ≥ 1"))
-    return draw(rng, sol.covariance, sol.u, nsamples)
+    return draw_posterior(rng, posterior_model(sol), sol.u, nsamples)
 end
 
-draw(rng, ::Nothing, μ, n) =
-    throw(ArgumentError("no posterior covariance: call `solve` with `covariance = true`"))
-
-# Global covariance of vec(μ)
-function draw(rng, Σ::AbstractMatrix, μ, n)
-    S = cholesky(Hermitian(Σ)).L
-    X = vec(μ) .+ S * randn(rng, eltype(μ), length(μ), n)
-    return reshape(X, size(μ)..., n)
-end
-
-# One covariance per column of μ (block-diagonal operator)
-function draw(rng, Σ::AbstractVector{<:AbstractMatrix}, μ::AbstractMatrix, n)
-    X = similar(μ, size(μ)..., n)
-    for j in axes(μ, 2)
-        S = cholesky(Hermitian(Σ[j])).L
-        X[:, j, :] = μ[:, j] .+ S * randn(rng, eltype(μ), size(μ, 1), n)
-    end
-    return X
-end
+posterior_model(sol::InverseSolution) = posterior_model(sol.posterior)
+posterior_model(::Nothing) =
+    throw(ArgumentError("no posterior: call `solve` with `precision = true`"))
+posterior_model(P) = P
 
 """
     credible_interval(sol; level = 0.95, nsamples = 10_000, rng = Random.default_rng())
@@ -68,7 +83,7 @@ end
 Bayesian credible interval of each entry of the solution, estimated by sampling the posterior ([`posterior_samples`](@ref)): empirical quantiles `(1 - level)/2` and `(1 + level)/2` of the samples, entry by entry. For complex unknowns, the quantiles are computed separately on the real and imaginary parts.
 
 **Inputs**
-- `sol` - `InverseSolution`: solution obtained with `solve(...; covariance = true)`
+- `sol` - `InverseSolution`: solution obtained with `solve(...; precision = true)`
 - `level` - `Real`: credibility level, in `]0, 1[`
 - `nsamples` - `Integer`: number of samples
 - `rng` - `AbstractRNG`: random number generator

@@ -186,6 +186,13 @@ les remplacent.
 | `Multiplicative(Groups(...); multiparameter = true)` | MPMR (JSV 2020)                                      |
 | `Bayesian(Groups(r => Lq(q₀), ...))`                 | régularisation bayésienne optimale (MSSP 2019)       |
 
+Avec `Additive` et uniquement des termes quadratiques (`Lq(2.0)`, éventuellement en `Groups`,
+avec leurs `L`), les poids IR sont constants (`W = 1`) : le problème est une régularisation de
+Tikhonov généralisée (multi-paramètres si `λ` est un vecteur), la solution initiale est la
+solution finale et `solve` fait **une seule résolution linéaire**, sans itération IR
+(`sol.iterations == 0`) ; avec une règle de choix (`LCurve()`, `GCV()`, `BayesEstimator()`),
+`λ` est choisi une fois.
+
 ## Choix du paramètre
 
 Toutes les règles travaillent sur la description spectrale de
@@ -244,17 +251,58 @@ Bayesian(Lq(2.0); τn = 1.0, τs = 0.5, q = Fixed())      # tout fixé : posteri
   données devient `‖y − Hu‖²_{R⁻¹}` ; elle est traitée une fois pour toutes par blanchiment
   (`H ← R^{-1/2}H`, `y ← R^{-1/2}y`). Dans le modèle bayésien, la covariance du bruit est
   `R/τn` ; par défaut `τn = 1` si `R` est fourni (covariance exacte), `τn` optimisé sinon.
-* `solve(...; covariance = true)` : covariance a posteriori de l'approximation gaussienne au
-  point fixe, `Σ = (τn (H̃ᴴH̃ + LᴴDL))⁻¹` avec `D = λW` les poids IR (exacte pour `q = 2`) ;
-  `τn = 1` pour les formulations additive et multiplicative (`R` supposée exacte). Pour un
-  opérateur bloc-diagonal, `Σ` est un vecteur de matrices `nr × nr` (une par fréquence).
-* `posterior_std(sol)` : écarts-types marginaux (diagonale de `Σ`) ;
-* `posterior_samples(sol, n; rng)` : échantillons `u = μ + S z`, `Σ = S Sᴴ` (Cholesky),
-  `z ~ randn(eltype(μ))` (loi normale complexe circulaire en complexe) ; une matrice `Σ` par
-  fréquence pour un opérateur bloc-diagonal ;
-* `credible_interval(sol; level = 0.95, nsamples = 10_000, rng)` : quantiles empiriques
-  `(1 − level)/2` et `(1 + level)/2` des échantillons, composante par composante (parties
-  réelle et imaginaire séparément en complexe).
+* `solve(...; precision = true)` : **précision** a posteriori de l'approximation gaussienne au
+  point fixe,
+
+      Q = τn A,    A = H̃ᴴH̃ + LᴴDL        (H̃ = R^{-1/2}H, D = λW : poids IR de la dernière résolution)
+
+  (exacte pour `q = 2` ; `τn = 1` pour les formulations additive et multiplicative, `R` étant
+  alors supposée exacte). On renvoie la précision plutôt que la covariance `Q⁻¹`, qui n'est
+  jamais formée par défaut : `Q` est **la matrice déjà construite par le solveur**, elle est
+  creuse dans le cas assemblé (blocs + bande, quelques Mo au lieu de 1,3 Go pour 21 points ×
+  451 fréquences) et contient toute l'information, corrélations entre fréquences comprises.
+
+  | cas | `sol.precision` |
+  |:--|:--|
+  | une fréquence, espace–temps dense | `Hermitian` dense |
+  | fréquence par fréquence (`Lq`), `Lpq` sans `Lc` | vecteur de `nf` blocs `nr × nr` (fréquences indépendantes ou bloc-diagonales) |
+  | `Lpq` avec `Lc` (assemblé) | `SparseMatrixCSC` `(nr·nf) × (nr·nf)` |
+
+  `sol.posterior` contient le modèle a posteriori (`Posterior`, ou `SamplewisePosterior` pour
+  la résolution fréquence par fréquence) : le cache du problème blanchi, `L`, `D`, `τn` et une
+  **factorisation de `A`** choisie par dispatch comme pour la résolution — Cholesky dense
+  (équations normales), `WoodburyFactor` (`nm < nr`, factorisation de `I + HD⁻¹Hᴴ` de taille
+  `nm`, sur la forme standard `HL⁻¹` si `L` est inversible), Cholesky creux (CHOLMOD) ou une
+  factorisation par bloc. Les quantités a posteriori sont calculées à la demande, en
+  appliquant `A⁻¹` à des blocs de seconds membres (`inverse_apply`) :
+
+* `posterior_samples(sol, n; rng)` — tirages par **perturbation–optimisation**. Avec
+  `ε₁ ~ N(0, I)` (taille des données) et `ε₂ ~ N(0, I)` (taille de `L u`), lois normales
+  complexes circulaires en complexe,
+
+      u_s = u + A⁻¹ (H̃ᴴ ε₁ + Lᴴ D^{1/2} ε₂) / √τn
+
+  a pour covariance `A⁻¹ (H̃ᴴH̃ + LᴴDL) A⁻¹ / τn = A⁻¹ / τn = Q⁻¹` : c'est un tirage exact de
+  `N(u, Q⁻¹)`. `u_s` est la solution du problème de Tikhonov pondéré dont les données et
+  l'a priori sont perturbés (d'où le nom), et chaque tirage coûte une application de `A⁻¹`
+  avec la factorisation du solveur, **sans factoriser `Q` ni former `Q⁻¹`**. L'avantage de
+  Woodbury est conservé dans le régime sous-déterminé (coût `O(nm·nr)` par tirage au lieu
+  d'un Cholesky `nr × nr`), et les tirages joints conservent les corrélations entre
+  fréquences ou instants. Pour des fréquences indépendantes ou bloc-diagonales, les tirages
+  sont faits fréquence par fréquence.
+* `posterior_covariance(sol; full = false)` — **solves par blocs** : le bloc diagonal `Σ_jj`
+  (`nr × nr`) de la fréquence ou de l'instant `j` est obtenu en appliquant `A⁻¹` aux `nr`
+  colonnes correspondantes de l'identité, `Σ_jj = (A⁻¹ E_j)[lignes de j, :] / τn`, avec la
+  factorisation du solveur ; la matrice `n × n` n'est jamais formée (mémoire `n·nr` pendant
+  le calcul, `nf·nr²` pour le résultat). On obtient les covariances **marginales exactes**
+  de chaque échantillon (une seule matrice pour un problème à une fréquence). Avec
+  `full = true`, on obtient la covariance complète de `vec(u)` (`A⁻¹` appliqué à
+  l'identité ; matrice creuse bloc-diagonale si les fréquences sont indépendantes).
+* `posterior_std(sol)` — écarts-types marginaux : racine de la diagonale des blocs `Σ_jj`
+  ci-dessus (solves par blocs).
+* `credible_interval(sol; level = 0.95, nsamples = 10_000, rng)` — quantiles empiriques
+  `(1 − level)/2` et `(1 + level)/2` des tirages de `posterior_samples`, composante par
+  composante (parties réelle et imaginaire séparément en complexe).
 
 ## Algorithmes
 
@@ -274,7 +322,7 @@ Bayesian(Lq(2.0); τn = 1.0, τs = 0.5, q = Fixed())      # tout fixé : posteri
   `sol.λ` contient `Λ` (format de `L u`), `sol.hyper.τs` les précisions `τ_i`.
 
   ```julia
-  sol = solve(prob, Bayesian(Lq(2.0)), ElementWise(); R = σ², covariance = true)
+  sol = solve(prob, Bayesian(Lq(2.0)), ElementWise(); R = σ², precision = true)
   ```
 
 ## Stratégie de résolution des problèmes espace–fréquence
@@ -380,7 +428,7 @@ condition d'optimalité (`∂R/∂v̄ᵢⱼ = Wᵢⱼ vᵢⱼ`, `R = Σᵢ Sᵢ^
 
 ## Mots-clés communs de `solve`
 
-`R` (covariance du bruit, non fournie par défaut ⇔ `I`), `covariance = false`, `tol = 1e-4`, `maxiter = 100`,
+`R` (covariance du bruit, non fournie par défaut ⇔ `I`), `precision = false`, `tol = 1e-4`, `maxiter = 100`,
 `init` (paramètre de la solution de Tikhonov initiale : `Heuristic()`, `LCurve()`, `GCV()`,
 `BayesEstimator()` ou un nombre).
 
@@ -443,9 +491,10 @@ src/
 │   ├── spectrum.jl         # SVD / GSVD du problème sous forme standard
 │   ├── regparam.jl         # L-curve, GCV, estimateur bayésien, heuristique
 │   ├── fdiff.jl            # opérateurs de différences finies : fd_weights, diff_operator
-│   ├── norms.jl            # valeurs des normes, paramètre d'amortissement ε, poids IR
+│   ├── weights.jl          # poids IR (reweight!), paramètre d'amortissement ε, valeurs des pénalités
 │   ├── bayes.jl            # modèle bayésien réel / complexe, lois conditionnelles
-│   └── uncertainty.jl      # posterior_std, posterior_samples, credible_interval
+│   ├── posterior.jl        # précision a posteriori, factorisation, perturbation–optimisation, solves par blocs
+│   └── uncertainty.jl      # posterior_std, posterior_covariance, posterior_samples, credible_interval
 └── solvers/                # algorithmes de résolution
     ├── ir.jl               # IR : formulations additive et multiplicative
     ├── map.jl              # MAP : formulation bayésienne hiérarchique

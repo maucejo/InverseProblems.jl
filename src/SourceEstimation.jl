@@ -56,14 +56,15 @@ include("utils/sparsesolve.jl") # sparse operators: sparse Cholesky (CHOLMOD)
 include("utils/minimize.jl")         # 1D minimization: Brent, refined grid search
 include("utils/spectrum.jl")  # SVD / GSVD of the standard-form problem
 include("utils/regparam.jl")  # L-curve, GCV, Bayesian estimator, heuristic
-include("utils/norms.jl")     # norm values, damping, IR weights
+include("utils/weights.jl")   # IR weights (reweight!), damping ε, penalty values
 include("utils/bayes.jl")     # real / complex Bayesian model
 
 include("utils/fdiff.jl")    # finite-difference smoothing operators
 export fd_weights, diff_operator, space_sample_operator, sample_rows
 
+include("utils/posterior.jl")  # posterior precision, perturbation–optimization, block solves
 include("utils/uncertainty.jl") # posterior samples and credible intervals
-export posterior_std, posterior_samples, credible_interval
+export posterior_std, posterior_covariance, posterior_samples, credible_interval
 
 # Solvers -------------------------------------------------------------------------------------
 include("solvers/ir.jl") # IR algorithm: additive and multiplicative formulations

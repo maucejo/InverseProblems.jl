@@ -60,7 +60,7 @@ dense_strategy(::SampleCoupling) = Joint()
 dense_strategy(::SmoothedSamples) = Assembled()
 
 """
-    solve(prob, formulation[, algorithm]; R = nothing, covariance = false, tol = 1e-4, maxiter = 100, init)
+    solve(prob, formulation[, algorithm]; R = nothing, precision = false, tol = 1e-4, maxiter = 100, init)
 
 Solve the inverse problem `prob` with the given regularization `formulation`. When the
 algorithm is omitted, [`default_algorithm`](@ref) is used.
@@ -82,19 +82,25 @@ Single-frequency and space–time problems are always solved as a whole.
 - `algorithm` - `Algorithm`: resolution algorithm (`IR()` for `Additive` and
   `Multiplicative`, `MAP()` or `ElementWise()` for `Bayesian`)
 - `R` - `Nothing`, `UniformScaling`, `Diagonal`, `AbstractVector` or `AbstractMatrix`: known diagonal noise covariance — not provided (default, equivalent to `I`), `σ²I`, or the noise variances (vector, or matrix with the layout of `y`). The data fidelity is `‖y - Hu‖²_{R⁻¹}`
-- `covariance` - `Bool`: also compute the posterior covariance of the solution. For the additive and multiplicative formulations, `R` is then taken as the exact noise covariance
+- `precision` - `Bool`: also return the posterior precision `Q = τn (Hᴴ H + Lᴴ D L)` of the
+  Gaussian approximation at the solution (`sol.precision`: dense, sparse for an assembled
+  space–frequency problem, or one `nr × nr` block per frequency for independent or
+  block-diagonal frequencies) and the posterior model (`sol.posterior`) used by
+  [`posterior_std`](@ref), [`posterior_covariance`](@ref), [`posterior_samples`](@ref) and
+  [`credible_interval`](@ref). For the additive and multiplicative formulations, `τn = 1`
+  (`R` is then taken as the exact noise covariance)
 - `tol` - `Real`: tolerance on the relative `ℓ1` variation of `u`
 - `maxiter` - `Integer`: maximum number of iterations
 - `init` - `Real` or `ParameterChoice`: initial Tikhonov solution — initial regularization parameter, or rule selecting it (`Heuristic()`, `LCurve()`, `GCV()`, `BayesEstimator()`)
 
 **Outputs**
 - `sol` - `InverseSolution`: solution, regularization parameter(s), hyperparameters,
-  convergence information and, if requested, posterior covariance. For a
+  convergence information and, if requested, posterior precision. For a
   frequency-by-frequency resolution, the quantities of each frequency are stacked as columns
   (`λ`: vector of length `nf`, or `G × nf` / `nr × nf` matrix; `hyper.τn`, `hyper.τs`,
   `hyper.q` likewise), `hyper` also contains the `iterations`, `converged` and `history` of
   each frequency, `iterations`/`converged`/`history` refer to the slowest frequency / all
-  frequencies, and `covariance` is a vector of `nr × nr` matrices
+  frequencies, and `precision` is a vector of `nr × nr` matrices
 """
 solve(prob::InverseProblem, f::Formulation; kwargs...) =
     solve(prob, f, default_algorithm(f); kwargs...)
@@ -115,6 +121,11 @@ stack_samples(x::AbstractVector{<:Real}) = x
 stack_samples(x::AbstractVector{<:AbstractVecOrMat}) = reduce(hcat, x)
 stack_samples(x) = x
 
+# Precisions and posterior models of the samples (nothing if not requested)
+gather_posteriors(::Nothing, sols) = (nothing, nothing)
+gather_posteriors(::Posterior, sols) =
+    ([s.precision for s in sols], SamplewisePosterior([s.posterior for s in sols]))
+
 function solve_strategy(::PerSample, prob, f, alg; R = nothing, kwargs...)
     σ2 = noise_variances(R, prob.y)
     blocks = prob.H.blocks
@@ -130,9 +141,9 @@ function solve_strategy(::PerSample, prob, f, alg; R = nothing, kwargs...)
              converged = [s.converged for s in sols],
              history = [s.history for s in sols])
     slowest = argmax([s.iterations for s in sols])
-    Σ = sols[1].covariance === nothing ? nothing : [s.covariance for s in sols]
+    Q, post = gather_posteriors(sols[1].posterior, sols)
     return InverseSolution(u, λ, hyper, sols[slowest].iterations, all(s.converged for s in sols),
-                           sols[slowest].history, Σ)
+                           sols[slowest].history, Q, post)
 end
 
 # Assembled resolution (operator along the samples) -------------------------------------------
@@ -168,13 +179,14 @@ with_prior(f::Additive, prior) = Additive(prior, f.λ)
 with_prior(::Multiplicative{<:Any,C}, prior) where {C} = Multiplicative{typeof(prior),C}(prior)
 with_prior(f::Bayesian, prior) = Bayesian(prior, f.τn, f.τs, f.q, f.shape_bounds)
 
-function solve_strategy(::Assembled, prob, f, alg; R = nothing, kwargs...)
+function solve_strategy(::Assembled, prob, f, alg; R = nothing, precision = false, kwargs...)
     nr, ns = unknown_size(prob)
     ns > 1 || throw(ArgumentError("an operator along the samples (Lc) requires several frequencies or time samples"))
     σ2 = noise_variances(R, prob.y)
     pv = InverseProblem(assembled_operator(prob.H), vec(prob.y))
     sol = solve_joint(pv, with_prior(f, vectorized(f.prior, nr, ns)), alg;
-                      R = σ2 === nothing ? nothing : vec(σ2), kwargs...)
+                      R = σ2 === nothing ? nothing : vec(σ2),
+                      precision = posterior_request(precision, nr), kwargs...)
     return InverseSolution(reshape(sol.u, nr, ns), sol.λ, sol.hyper, sol.iterations,
-                           sol.converged, sol.history, sol.covariance)
+                           sol.converged, sol.history, sol.precision, sol.posterior)
 end

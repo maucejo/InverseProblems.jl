@@ -13,6 +13,9 @@ function beam_frf(ω; nm = 30, nr = 25, nmodes = 30, ξ = 0.01)
                 for n in 1:nmodes) for i in 1:nm, j in 1:nr]
 end
 
+# Reference inverse by a factorization-based solve (no explicit inverse): A \ I
+solve_identity(A) = Matrix(A) \ Matrix{eltype(A)}(I, size(A)...)
+
 const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
 
 @testset "SourceEstimation.jl" begin
@@ -136,16 +139,18 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
                 D = rand(size(Lm, 1), ns) .+ 0.1
                 A = H'H + Lg' * Diagonal(vec(D)) * Lg
                 @test vec(IP.weighted_solve(c, Lop, D)) ≈ A \ (H' * vec(y))
-                @test IP.posterior_covariance(c, Lop, D) ≈ inv(A)
+                @test IP.inverse_apply(IP.posterior_factor(c, Lop, D), Matrix{T}(I, nr * ns, nr * ns)) ≈ solve_identity(A)
+                @test IP.precision_matrix(c, Lop, D, 2.0) ≈ 2A
                 # block-diagonal operator
                 Hs = [randn(T, nm, nr) for _ in 1:ns]
                 cb = IP.linear_cache(InverseProblem(Hs, y))
                 U = IP.weighted_solve(cb, Lop, D)
-                Σ = IP.posterior_covariance(cb, Lop, D)
+                Fb = IP.posterior_factor(cb, Lop, D)
+                Σ = [IP.inverse_apply(Fb[j], Matrix{T}(I, nr, nr)) for j in 1:ns]
                 for j in 1:ns
                     Aj = Hs[j]'Hs[j] + Lm' * Diagonal(D[:, j]) * Lm
                     @test U[:, j] ≈ Aj \ (Hs[j]' * y[:, j])
-                    @test Σ[j] ≈ inv(Aj)
+                    @test Σ[j] ≈ solve_identity(Aj)
                 end
             end
         end
@@ -253,8 +258,8 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test e[17] / sum(e) > 0.95
         @test size(s.u) == size(U)
         # posterior covariance: one nr × nr matrix per frequency
-        s = solve(prob, Additive(Lq(2.0); λ = 1e-12); covariance = true)
-        @test length(s.covariance) == length(ωs)
+        s = solve(prob, Additive(Lq(2.0); λ = 1e-12); precision = true)
+        @test length(s.precision) == length(ωs) && length(posterior_covariance(s)) == length(ωs)
         @test size(posterior_std(s)) == size(U)
         @test size(posterior_samples(s, 10)) == (size(U)..., 10)
         lo, up = credible_interval(s; nsamples = 500)
@@ -274,11 +279,29 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test IP.sample_coupling(Groups(1:5 => Lq(1.0), 6:10 => Lpq(2, 0.5; Lc = Lf))) isa IP.SmoothedSamples
         @test IP.strategy(pb, Multiplicative(Lpq(2, 0.5; Lc = Lf))) isa IP.Assembled
         # native Lf = vectorized problem with L = kron(Lf, I)
-        a = solve(pb, Multiplicative(Lpq(2, 0.5; Lc = Lf)); init = 1e-2, covariance = true)
+        a = solve(pb, Multiplicative(Lpq(2, 0.5; Lc = Lf)); init = 1e-2, precision = true)
         b = solve(pv, Multiplicative(Lpq(2, 0.5; L = space_sample_operator(nr, nf; Lc = Lf), samples = nf));
-                  init = 1e-2, covariance = true)
+                  init = 1e-2, precision = true)
         @test vec(a.u) ≈ b.u && a.λ ≈ b.λ && size(a.u) == (nr, nf)
-        @test a.covariance ≈ b.covariance && size(posterior_std(a)) == (nr, nf)
+        # sparse precision; marginal blocks (block solves) or full covariance
+        @test a.precision isa SparseMatrixCSC && a.precision ≈ b.precision
+        Σb = posterior_covariance(b)                                     # vectorized: one block
+        @test posterior_covariance(a; full = true) ≈ Σb ≈ solve_identity(Matrix(a.precision))
+        Σa = posterior_covariance(a)
+        @test length(Σa) == nf && size(Σa[1]) == (nr, nr)
+        @test all(Σa[j] ≈ Σb[(j-1)*nr+1:j*nr, (j-1)*nr+1:j*nr] for j in 1:nf)
+        @test posterior_std(a) ≈ reshape(sqrt.(real(diag(Σb))), nr, nf)
+        lo, up = credible_interval(a; nsamples = 200)
+        @test size(lo) == (nr, nf)
+        # joint samples (perturbation–optimization): empirical covariance → full covariance
+        X = reshape(posterior_samples(a, 40_000; rng = Xoshiro(2)), nr * nf, :)
+        Xc = X .- vec(a.u)
+        @test isapprox(Xc * Xc' / size(X, 2), Σb; rtol = 0.05)
+        # space–time (dense): marginal blocks per time step from the dense covariance
+        Hst, Yst = randn(nm * 4, nr * 4), randn(nm, 4)
+        sm = solve(InverseProblem(Hst, Yst), Additive(Lpq(2, 1); λ = 0.1); precision = true)
+        Σm, Σf = posterior_covariance(sm), posterior_covariance(sm; full = true)
+        @test length(Σm) == 4 && Σm[3] ≈ Σf[2nr+1:3nr, 2nr+1:3nr] && Σf ≈ solve_identity(Matrix(sm.precision))
         # groups, per-point noise variances
         r = 0.01 .+ rand(nm)
         a = solve(pb, Multiplicative(Groups(1:5 => Lpq(2, 0.5; Lc = Lf), 6:10 => Lq(1.0))); R = r, init = 1e-2)
@@ -328,7 +351,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
                 X0 = X
                 crit < 1e-8 && break
             end
-            P = [inv(A[f]'A[f] + λ * Diagonal(W[:, f])) for f in 1:nf]
+            P = [solve_identity(A[f]'A[f] + λ * Diagonal(W[:, f])) for f in 1:nf]
             return reshape(X, nx, nf), P, λ
         end
         Random.seed!(13)
@@ -340,15 +363,48 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         Y = Y0 .+ sqrt.(r) .* randn(ComplexF64, size(Y0))
         Xr, Pr, λr = lpq_reg_ref(Hs, Y, 2.0, 0.5, r)
         s = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)); R = r, init = LambdaMax(),
-                  maxiter = 50, covariance = true)
+                  maxiter = 50, precision = true)
         @test s.u ≈ Xr rtol = 1e-8
         @test s.λ ≈ λr rtol = 1e-8
-        @test all(s.covariance[f] ≈ Pr[f] for f in eachindex(ωs))
+        @test all(posterior_covariance(s)[f] ≈ Pr[f] for f in eachindex(ωs))
         # per-point variances: vector, Diagonal or diagonal matrix nm × nm
         for R in (Diagonal(r), Matrix(Diagonal(r)))
             @test solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)); R, init = LambdaMax(), maxiter = 50).u ≈ s.u
         end
         @test_throws ArgumentError Additive(Lq(1.0); λ = LambdaMax())
+    end
+
+    @testset "Posterior precision and perturbation–optimization" begin
+        IP = SourceEstimation
+        Random.seed!(15)
+        # under-determined problems (Woodbury identity), with L = I and an invertible L
+        for T in (Float64, ComplexF64), Lt in (Lq(2.0), Lq(2.0; L = diff_operator(12, 1) + 0.5I))
+            H, y = randn(T, 6, 12), randn(T, 6)
+            s = solve(InverseProblem(H, y), Additive(Lt; λ = 0.5); precision = true)
+            @test s.posterior.F isa IP.WoodburyFactor
+            Σ = solve_identity(Matrix(s.precision))
+            @test posterior_covariance(s) ≈ Σ
+            @test posterior_std(s) ≈ sqrt.(real(diag(Σ)))
+            X = posterior_samples(s, 60_000; rng = Xoshiro(3))
+            Xc = X .- s.u
+            @test isapprox(Xc * Xc' / size(X, 2), Σ; rtol = 0.05)
+        end
+        @test_throws ArgumentError posterior_std(solve(InverseProblem(randn(6, 4), randn(6)), Additive(Lq(2.0); λ = 0.5)))
+    end
+
+    @testset "Quadratic additive regularization: closed form" begin
+        Random.seed!(16)
+        H, y = randn(20, 12), randn(20)
+        prob = InverseProblem(H, y)
+        # fixed λ, multi-parameter λ and parameter choice: one linear solve, no IR iteration
+        s = solve(prob, Additive(Lq(2.0); λ = 0.3))
+        @test s.iterations == 0 && s.converged && s.u ≈ (H'H + 0.3I) \ (H'y)
+        s = solve(prob, Additive(Groups(1:6 => Lq(2.0), 7:12 => Lq(2.0)); λ = [0.1, 1.0]))
+        @test s.iterations == 0 && s.u ≈ (H'H + Diagonal([fill(0.1, 6); fill(1.0, 6)])) \ (H'y)
+        s = solve(prob, Additive(Lq(2.0); λ = GCV()))
+        @test s.iterations == 0 && s.u ≈ (H'H + s.λ * I) \ (H'y)
+        # not quadratic: IR iterations
+        @test solve(prob, Additive(Lq(1.0); λ = 0.3)).iterations > 0
     end
 
     @testset "Noise covariance" begin
@@ -367,9 +423,10 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test_throws ArgumentError solve(prob, Additive(Lq(2.0); λ = 0.3); R = ones(15, 15))
         @test_throws DimensionMismatch solve(prob, Additive(Lq(2.0); λ = 0.3); R = ones(14))
         # posterior covariance of the additive formulation
-        s = solve(prob, Additive(Lq(2.0); λ = 0.3); R = v, covariance = true)
-        @test s.covariance ≈ inv(H' * (H ./ v) + 0.3I)
-        @test posterior_std(s) ≈ sqrt.(diag(inv(H' * (H ./ v) + 0.3I)))
+        s = solve(prob, Additive(Lq(2.0); λ = 0.3); R = v, precision = true)
+        @test posterior_covariance(s) ≈ solve_identity(H' * (H ./ v) + 0.3I)
+        @test s.precision ≈ H' * (H ./ v) + 0.3I
+        @test posterior_std(s) ≈ sqrt.(diag(solve_identity(H' * (H ./ v) + 0.3I)))
         @test_throws ArgumentError posterior_std(solve(prob, Additive(Lq(2.0); λ = 0.3)))
     end
 
@@ -408,7 +465,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
                 ee += 1
                 X0 = X
             end
-            return X, inv(AtA + Λ)
+            return X, solve_identity(AtA + Λ)
         end
         Random.seed!(9)
         for T in (Float64, ComplexF64), (nm, nr) in ((30, 20), (15, 25))
@@ -417,19 +474,19 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
             # dense operator, R = σ² I (τn = 1)
             H = randn(T, nm, nr)
             y = H * u + σ * randn(T, nm)
-            s = solve(InverseProblem(H, y), Bayesian(Lq(2.0)), ElementWise(); R = σ^2 * I, covariance = true)
+            s = solve(InverseProblem(H, y), Bayesian(Lq(2.0)), ElementWise(); R = σ^2 * I, precision = true)
             Xr, Pr = rvr_ref(H / σ, y / σ)
             @test s.u ≈ Xr rtol = 1e-6
-            @test s.covariance ≈ Pr rtol = 1e-6
+            @test posterior_covariance(s) ≈ Pr rtol = 1e-6
             @test s.hyper.τn == 1
             # block-diagonal operator: one RVR per frequency
             Hs = [randn(T, nm, nr) for _ in 1:3]
             Y = reduce(hcat, [Hj * u + σ * randn(T, nm) for Hj in Hs])
-            s = solve(InverseProblem(Hs, Y), Bayesian(Lq(2.0)), ElementWise(); R = σ^2 * I, covariance = true)
+            s = solve(InverseProblem(Hs, Y), Bayesian(Lq(2.0)), ElementWise(); R = σ^2 * I, precision = true)
             for j in 1:3
                 Xr, Pr = rvr_ref(Hs[j] / σ, Y[:, j] / σ)
                 @test s.u[:, j] ≈ Xr rtol = 1e-5
-                @test s.covariance[j] ≈ Pr rtol = 1e-5
+                @test posterior_covariance(s)[j] ≈ Pr rtol = 1e-5
             end
         end
         @test_throws ArgumentError solve(InverseProblem(randn(5, 4), randn(5)), Bayesian(Lq(1.0)), ElementWise())
@@ -464,12 +521,12 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test size(solve(prob, f; R = σ2).λ) == (2, length(ωs))
         # Bayesian MAP: hyperparameters per frequency, covariance per frequency
         f = Bayesian(Lq(1.0))
-        s = solve(prob, f; R = σ2, covariance = true)
-        ref = loop(f, MAP(); covariance = true)
+        s = solve(prob, f; R = σ2, precision = true)
+        ref = loop(f, MAP(); precision = true)
         @test s.u ≈ reduce(hcat, [r.u for r in ref])
         @test s.hyper.τn == [r.hyper.τn for r in ref]          # = 1: R exact
         @test size(s.hyper.q) == (1, length(ωs))
-        @test length(s.covariance) == length(ωs) && s.covariance[2] ≈ ref[2].covariance
+        @test length(posterior_covariance(s)) == length(ωs) && posterior_covariance(s)[2] ≈ posterior_covariance(ref[2])
         lo, up = credible_interval(s; nsamples = 200)
         @test size(lo) == size(U)
         # element-wise Bayesian: exactly one RVR per frequency
@@ -498,17 +555,17 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         # frequency smoothing L = Lf ⊗ I couples the frequencies
         Lf = kron(diff_operator(nf, 1), sparse(1.0I, nr, nr))
         Hd = Matrix(Hb)
-        s = solve(ps, Additive(Lq(2.0; L = Lf); λ = 0.1); R = v, covariance = true)
+        s = solve(ps, Additive(Lq(2.0; L = Lf); λ = 0.1); R = v, precision = true)
         A = Hd' * (Hd ./ v) + 0.1 * Matrix(Lf' * Lf)
         @test s.u ≈ A \ (Hd' * (y ./ v))
-        @test s.covariance ≈ inv(A)
+        @test posterior_covariance(s) ≈ solve_identity(A)
         # same results as the dense path
         for (f, alg, kw) in ((Multiplicative(Lq(0.5)), IR(), (init = 1e-2,)),
                              (Bayesian(Lq(1.0)), MAP(), (init = 1e-2,)),
                              (Bayesian(Lq(2.0)), ElementWise(), (;)))
-            a, b = solve(ps, f, alg; kw..., covariance = true), solve(pd, f, alg; kw..., covariance = true)
+            a, b = solve(ps, f, alg; kw..., precision = true), solve(pd, f, alg; kw..., precision = true)
             @test a.u ≈ b.u rtol = 1e-8
-            @test a.covariance ≈ b.covariance rtol = 1e-6
+            @test posterior_covariance(a) ≈ posterior_covariance(b) rtol = 1e-6
         end
         # default initializations: heuristic estimate for the OMR and the MAP
         s = solve(ps, Multiplicative(Lq(0.5)))
@@ -556,14 +613,14 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         for (T, τs) in ((Float64, 1.0), (ComplexF64, 1.0))
             H = randn(T, m, n)
             reg = Bayesian(Lq(2.0); τn = 1.0, τs = τs, q = Fixed())
-            Σexact = inv(H'H / σ^2 + I)
+            Σexact = solve_identity(H'H / σ^2 + I)
             covered, total = 0, 0
             for _ in 1:200
                 u = randn(T, n)
                 y = H * u + σ * randn(T, m)
-                s = solve(InverseProblem(H, y), reg; R = σ^2 * I, covariance = true)
+                s = solve(InverseProblem(H, y), reg; R = σ^2 * I, precision = true)
                 @test s.u ≈ Σexact * (H'y) / σ^2
-                @test s.covariance ≈ Σexact
+                @test posterior_covariance(s) ≈ Σexact
                 lo, up = credible_interval(s; level = 0.95, nsamples = 4000)
                 if T <: Real
                     covered += count(lo .<= u .<= up); total += n
@@ -576,7 +633,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
             @test 0.93 < covered / total < 0.97
             # samples u = μ + S z, Σ = S Sᴴ: empirical mean and covariance
             y = H * randn(T, n) + σ * randn(T, m)
-            s = solve(InverseProblem(H, y), reg; R = σ^2 * I, covariance = true)
+            s = solve(InverseProblem(H, y), reg; R = σ^2 * I, precision = true)
             X = posterior_samples(s, 100_000; rng = Xoshiro(1))
             @test size(X) == (n, 100_000)
             @test isapprox(vec(sum(X; dims = 2)) / 100_000, s.u; atol = 0.02)

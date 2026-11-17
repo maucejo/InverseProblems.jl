@@ -31,7 +31,7 @@ update_noise_precision(::Estimated, F, N, r2) = noise_precision(F, N, r2)
 update_noise_precision(τ::Real, F, N, r2) = float(τ)
 
 """
-    solve_joint(prob, f::Bayesian, MAP(); R = nothing, covariance = false, tol = 1e-4, maxiter = 100, inner_tol = 1e-4, inner_maxiter = 100, init = nothing)
+    solve_joint(prob, f::Bayesian, MAP(); R = nothing, precision = false, tol = 1e-4, maxiter = 100, inner_tol = 1e-4, inner_maxiter = 100, init = nothing)
 
 Optimal Bayesian regularization: MAP of the hierarchical model, alternating the updates of `q_g`, `τs_g`, `τn` (those marked `Estimated()`) and of `u` (IR algorithm).
 
@@ -39,7 +39,7 @@ Optimal Bayesian regularization: MAP of the hierarchical model, alternating the 
 - `prob` - `InverseProblem`: inverse problem
 - `f` - `Bayesian`: Bayesian formulation
 - `R` - noise covariance (see [`solve`](@ref)), `nothing` if not provided
-- `covariance` - `Bool`: also compute the posterior covariance `(τn (H̃ᴴH̃ + LᴴDL))⁻¹` of the Gaussian approximation at the MAP (`H̃ = R^{-1/2} H`)
+- `precision` - `Bool`: also return the posterior precision `τn (H̃ᴴH̃ + LᴴDL)` of the Gaussian approximation at the MAP (`H̃ = R^{-1/2} H`) and the posterior model (see [`solve`](@ref))
 - `tol` - `Real`: tolerance on the relative `ℓ1` variation of `u` (outer loop)
 - `maxiter` - `Integer`: maximum number of outer iterations
 - `inner_tol` - `Real`: tolerance of the IR algorithm (u-step)
@@ -51,13 +51,13 @@ Optimal Bayesian regularization: MAP of the hierarchical model, alternating the 
 - `sol` - `InverseSolution`: MAP estimate, regularization parameters `λ_g = τs_g/τn` of the
   MAP in `u` — `½‖y - Hu‖²_R + Σ_g (λ_g/q_g)‖L_g u_g‖_q^q` for real data,
   `‖y - Hu‖²_R + Σ_g λ_g ‖L_g u_g‖_q^q` for complex data —, hyperparameters `(τn, τs, q)` in
-  `sol.hyper`, convergence information and, if requested, posterior covariance
+  `sol.hyper`, convergence information and, if requested, posterior precision
 """
-function solve_joint(prob::InverseProblem, f::Bayesian, ::MAP; R = nothing, covariance::Bool = false,
+function solve_joint(prob::InverseProblem, f::Bayesian, ::MAP; R = nothing, precision = false,
                tol = 1e-4, maxiter = 100, inner_tol = 1e-8, inner_maxiter = 100,
                init = nothing)
     c, reg = setup(prob, f.prior, R)
-    return map_solve(prob, f, c, reg, noise_spec(f.τn, R), covariance, tol, maxiter,
+    return map_solve(prob, f, c, reg, noise_spec(f.τn, R), posterior_request(precision), tol, maxiter,
                      inner_tol, inner_maxiter, map_init(init, c, reg))
 end
 
@@ -69,7 +69,7 @@ map_init(::Nothing, c::SparseCache, reg) =
 map_init(init, c, reg) = init
 
 # Function barrier (see `ir_solve`)
-function map_solve(prob, f, c, reg, τnspec, covariance, tol, maxiter, inner_tol, inner_maxiter, init)
+function map_solve(prob, f, c, reg, τnspec, request, tol, maxiter, inner_tol, inner_maxiter, init)
     F = field(eltype(c))
     cn = misfit_factor(F)
     q = Float64[shape(t) for t in reg.terms]
@@ -109,13 +109,11 @@ function map_solve(prob, f, c, reg, τnspec, covariance, tol, maxiter, inner_tol
             break
         end
     end
-    Σ = covariance ? scale_covariance(posterior_covariance(c, reg.L, D), τn) : nothing
+    Q, post = posterior_output(request, c, reg.L, D, τn)
     hyper = (τn = τn, τs = τs, q = q)
-    return InverseSolution(output_shape(prob, U), τs ./ τn, hyper, length(history), converged, history, Σ)
+    return InverseSolution(output_shape(prob, U), τs ./ τn, hyper, length(history), converged, history, Q, post)
 end
 
-scale_covariance(Σ::AbstractMatrix, τn) = Σ / τn
-scale_covariance(Σ::AbstractVector{<:AbstractMatrix}, τn) = [S / τn for S in Σ]
 
 # MAP in u, with λ_g = τs_g / τn:
 #     real:    ½‖y - Hu‖²_R + Σ_g (λ_g/q_g) ‖L_g u_g‖_q^q

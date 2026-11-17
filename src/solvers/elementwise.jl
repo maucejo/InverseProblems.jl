@@ -14,7 +14,7 @@ initial_weights(c::BlockCache, reg, λ::AbstractVector) = repeat(transpose(float
 initial_weights(c::BlockCache, reg, λ::Real) = fill(float(λ), reg.nout, c.ns)
 
 """
-    solve_joint(prob, f::Bayesian, ElementWise(); R = nothing, covariance = false, tol = 1e-8, maxiter = 200, init = nothing)
+    solve_joint(prob, f::Bayesian, ElementWise(); R = nothing, precision = false, tol = 1e-8, maxiter = 200, init = nothing)
 
 Element-wise Bayesian regularization (Relevance Vector Regression): MAP of a hierarchical model where each component of `L u` has its own Gaussian prior precision `τ_i`, alternating the updates of the precisions, of `τn` (if `Estimated()`) and of `u`. Only the smoothing operators of `f.prior` are used: the prior is Gaussian (`q = 2`), so all its terms must be `Lq(2.0)`, and the signal precisions must be `Estimated()`.
 
@@ -22,27 +22,28 @@ Element-wise Bayesian regularization (Relevance Vector Regression): MAP of a hie
 - `prob` - `InverseProblem`: inverse problem
 - `f` - `Bayesian`: Bayesian formulation (`τn` fixed or estimated, as for `MAP()`)
 - `R` - noise covariance (see [`solve`](@ref)), `nothing` if not provided
-- `covariance` - `Bool`: also compute the posterior covariance `(τn (H̃ᴴH̃ + Lᴴ Λ L))⁻¹`
+- `precision` - `Bool`: also return the posterior precision `τn (H̃ᴴH̃ + Lᴴ Λ L)` and the posterior
+  model (see [`solve`](@ref))
   (`H̃ = R^{-1/2} H`)
 - `tol` - `Real`: tolerance on the relative `ℓ1` variation of `u`
 - `maxiter` - `Integer`: maximum number of iterations
 - `init` - `Nothing`, `Real` or `ParameterChoice`: initial Tikhonov parameter — by default `‖2 Hᴴ y‖∞` (per sample for a block-diagonal operator)
 
 **Outputs**
-- `sol` - `InverseSolution`: MAP estimate, element-wise regularization parameters `Λ = τ / τn` (layout of `L u`; MAP `½‖y - Hu‖²_R + ½ Σᵢ Λᵢ |vᵢ|²` for real data, `‖y - Hu‖²_R + Σᵢ Λᵢ |vᵢ|²` for complex data) in `sol.λ`, hyperparameters `(τn, τs)` in `sol.hyper` (`τs`: element-wise precisions), convergence information and, if requested, posterior covariance
+- `sol` - `InverseSolution`: MAP estimate, element-wise regularization parameters `Λ = τ / τn` (layout of `L u`; MAP `½‖y - Hu‖²_R + ½ Σᵢ Λᵢ |vᵢ|²` for real data, `‖y - Hu‖²_R + Σᵢ Λᵢ |vᵢ|²` for complex data) in `sol.λ`, hyperparameters `(τn, τs)` in `sol.hyper` (`τs`: element-wise precisions), convergence information and, if requested, posterior precision
 """
 function solve_joint(prob::InverseProblem, f::Bayesian, ::ElementWise; R = nothing,
-               covariance::Bool = false, tol = 1e-8, maxiter = 200, init = nothing)
+               precision = false, tol = 1e-8, maxiter = 200, init = nothing)
     f.τs isa Estimated ||
         throw(ArgumentError("the element-wise algorithm estimates the signal precisions: use τs = Estimated()"))
     c, reg = setup(prob, f.prior, R)
     all(t -> t isa Lq && t.q == 2, reg.terms) ||
         throw(ArgumentError("the element-wise algorithm uses Gaussian priors: all terms must be Lq(2.0)"))
-    return elementwise_solve(prob, c, reg, noise_spec(f.τn, R), covariance, tol, maxiter, init)
+    return elementwise_solve(prob, c, reg, noise_spec(f.τn, R), posterior_request(precision), tol, maxiter, init)
 end
 
 # Function barrier (see `ir_solve`)
-function elementwise_solve(prob, c, reg, τnspec, covariance, tol, maxiter, init)
+function elementwise_solve(prob, c, reg, τnspec, request, tol, maxiter, init)
     F = field(eltype(c))
     N = ndata(c)
 
@@ -70,9 +71,9 @@ function elementwise_solve(prob, c, reg, τnspec, covariance, tol, maxiter, init
             break
         end
     end
-    Σ = covariance ? scale_covariance(posterior_covariance(c, reg.L, D), τn) : nothing
+    Q, post = posterior_output(request, c, reg.L, D, τn)
     hyper = (τn = τn, τs = τs)
-    return InverseSolution(output_shape(prob, U), D, hyper, length(history), converged, history, Σ)
+    return InverseSolution(output_shape(prob, U), D, hyper, length(history), converged, history, Q, post)
 end
 
 # Initial Tikhonov parameter: ‖2 Hᴴ y‖∞ by default, a fixed value, or a parameter choice rule

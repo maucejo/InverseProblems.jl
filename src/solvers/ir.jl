@@ -164,7 +164,7 @@ function setup(prob::InverseProblem, prior::RegularizationTerm, R)
 end
 
 """
-    solve_joint(prob, f::Union{Additive,Multiplicative}, IR(); R = nothing, covariance = false,
+    solve_joint(prob, f::Union{Additive,Multiplicative}, IR(); R = nothing, precision = false,
                 tol = 1e-8, maxiter = 100, init)
 
 IR resolution of the additive and multiplicative formulations, the whole problem being solved
@@ -177,23 +177,42 @@ at once (see [`solve`](@ref) for the keywords).
 
 **Outputs**
 - `sol` - `InverseSolution`: solution, regularization parameter(s), convergence information
-  and, if requested, posterior covariance
+  and, if requested, posterior precision
 """
 function solve_joint(prob::InverseProblem, f::Union{Additive,Multiplicative}, ::IR;
-               R = nothing, covariance::Bool = false, tol = 1e-8, maxiter = 100, init = default_init(f))
+               R = nothing, precision = false, tol = 1e-8, maxiter = 100, init = default_init(f))
     c, reg = setup(prob, f.prior, R)
-    return ir_solve(prob, f, c, reg, covariance, tol, maxiter, init)
+    return ir_solve(prob, f, c, reg, posterior_request(precision), tol, maxiter, init)
 end
 
-# Function barrier: the types of the cache (regime of the problem) and of the smoothing
-# operator (identity, invertible or not) depend on the values of the data, the solver is
-# compiled for the concrete types.
-function ir_solve(prob, f, c, reg, covariance, tol, maxiter, init)
+# Function barrier: the types of the cache (regime of the problem) and of the smoothing operator (identity, invertible or not) depend on the values of the data, the solver is compiled for the concrete types.
+function ir_solve(prob, f, c, reg, request, tol, maxiter, init)
     sys = linear_system(c, reg.L)
-    U0, _ = initial_solution(sys, reg, init)
-    ε = dampings(reg, apply(reg.L, U0))
-    st = reweighting(sys, reg, f, U0, ε; tol, maxiter)
-    Σ = covariance ? posterior_covariance(c, reg.L, st.D) : nothing
+    st = ir_fixed_point(f, sys, reg, init; tol, maxiter)
+    Q, post = posterior_output(request, c, reg.L, st.D, 1)
     return InverseSolution(output_shape(prob, st.U), st.λ, (;),
-                           length(st.history), st.converged, st.history, Σ)
+                           length(st.history), st.converged, st.history, Q, post)
 end
+
+# Initial Tikhonov solution, then IR fixed point
+function ir_fixed_point(f::Formulation, sys, reg, init; tol, maxiter)
+    U0 = initial_solution(sys, reg, init)[1]
+    ε = dampings(reg, apply(reg.L, U0))
+    return reweighting(sys, reg, f, U0, ε; tol, maxiter)
+end
+
+# Additive regularization with quadratic terms only (Lq(2) everywhere): the IR weights are
+# constant (W = 1), the problem is a (generalized, possibly multi-parameter) Tikhonov
+# regularization and the initial solution is the final one — a single linear solve.
+function ir_fixed_point(f::Additive, sys, reg, init; tol, maxiter)
+    is_quadratic(reg) || return invoke(ir_fixed_point, Tuple{Formulation,Any,Any,Any}, f, sys, reg, init; tol, maxiter)
+    c = sys.c
+    T = real(eltype(c))
+    W = ones(T, reg.nout, c.ns)
+    λ = regularization_parameter(f, sys, reg, nothing, W, zeros(T, ngroups(reg)))
+    D = scale_weights!(similar(W), W, λ, reg)
+    U = weighted_solve!(Matrix{eltype(c)}(undef, c.nr, c.ns), sys, D)
+    return (; U, λ, W, D, converged = true, history = Float64[])
+end
+
+is_quadratic(reg::Regularization) = all(t -> t isa Lq && t.q == 2, reg.terms)

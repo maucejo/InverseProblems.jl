@@ -112,11 +112,6 @@ function weighted_gram(c::DenseCache, S::MatrixSmoothing, d)
     return Matrix(Lg' * Diagonal(d) * Lg)
 end
 
-# (Hᴴ H + D)⁻¹ = D⁻¹ - D⁻¹ Hᴴ (I + H D⁻¹ Hᴴ)⁻¹ H D⁻¹, Woodbury identity
-function woodbury_inverse(H, d)
-    HD = H ./ transpose(d)
-    return Diagonal(1 ./ d) - HD' * (cholesky!(Hermitian(HD * H' + I)) \ HD)
-end
 
 # H̃ = H L⁻¹ (standard form for a square invertible L)
 standard_form(c::DenseCache, S::InvertibleSmoothing) = Matrix(smoothing_ldiv_adjoint(S, Matrix(c.H'), c.nr)')
@@ -282,38 +277,6 @@ Allocating version of [`weighted_solve!`](@ref), for one-off solves.
 """
 weighted_solve(c, S::SmoothingOperator, D::AbstractMatrix{<:Real}) =
     weighted_solve!(Matrix{eltype(c)}(undef, c.nr, c.ns), linear_system(c, S), D)
-
-"""
-    posterior_covariance(cache, L, D)
-
-Covariance `(Hᴴ H + Lᴴ diag(vec(D)) L)⁻¹` (whitened `H`) of the Gaussian approximation of the posterior at a fixed point of the IR algorithm (exact for `q = 2`). The inverse is computed from the normal equations or the Woodbury identity, as in [`weighted_solve`](@ref).
-
-**Inputs**
-- `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
-- `L` - `SmoothingOperator`: `IdentitySmoothing()` or `MatrixSmoothing`
-- `D` - `AbstractMatrix{<:Real}`: scaled weights `λ W` of the last linear solve
-
-**Outputs**
-- `Σ` - `Hermitian` (dense operator) or `Vector{<:Hermitian}` (block-diagonal operator, one
-  `nr × nr` matrix per sample)
-"""
-posterior_covariance(c::Overdetermined, S::SmoothingOperator, D::AbstractMatrix{<:Real}) =
-    Hermitian(inv(cholesky(Hermitian(c.HtH + weighted_gram(c, S, vec(D))))))
-
-posterior_covariance(c::Underdetermined, ::IdentitySmoothing, D::AbstractMatrix{<:Real}) =
-    Hermitian(woodbury_inverse(c.H, vec(D)))
-
-function posterior_covariance(c::Underdetermined, S::InvertibleSmoothing, D::AbstractMatrix{<:Real})
-    Σv = woodbury_inverse(standard_form(c, S), vec(D))         # covariance of v = L u
-    X = smoothing_ldiv(S, Matrix(Σv), c.nr)                    # L⁻¹ Σv
-    return Hermitian(Matrix(smoothing_ldiv(S, Matrix(X'), c.nr)'))   # L⁻¹ Σv L⁻ᴴ
-end
-
-posterior_covariance(c::Underdetermined, S::SingularSmoothing, D::AbstractMatrix{<:Real}) =
-    Hermitian(inv(cholesky(Hermitian(gram(c) + weighted_gram(c, S, vec(D))))))
-
-posterior_covariance(c::BlockCache, S::SmoothingOperator, D::AbstractMatrix{<:Real}) =
-    [posterior_covariance(c.blocks[j], S, view(D, :, j:j)) for j in 1:c.ns]
 
 """
     residual_norm2!(sys, U)

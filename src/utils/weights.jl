@@ -1,4 +1,4 @@
-# Norm values, damping parameter and IR weights ---------------------------------------
+# IR weights: penalty values, damping parameter and reweighting (reweight!) -----------------
 
 # `penalty(term, V)` is evaluated on V = L_g U_g.
 

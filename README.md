@@ -96,7 +96,7 @@ sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)))   # mixed norm: 
 sol = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5; Lc = diff_operator(nf, 1; h = Δf))))
 
 # Known diagonal noise covariance, posterior covariance and credible intervals
-sol = solve(prob, Bayesian(Lq(1.0)); R = σ², covariance = true)
+sol = solve(prob, Bayesian(Lq(1.0)); R = σ², precision = true)
 lo, up = credible_interval(sol; level = 0.95)
 
 sol.u        # reconstructed field

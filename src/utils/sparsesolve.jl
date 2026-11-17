@@ -107,30 +107,8 @@ end
 residual_norm2(c::SparseCache, U) = sum(abs2, c.y - c.H * vec(U))
 marginal_quadratic(c::SparseCache, U) = real(dot(c.y, c.y - c.H * vec(U)))
 
-"""
-    posterior_covariance(cache::SparseCache, L, D)
-
-Posterior covariance `(Hᴴ H + Lᴴ diag(vec(D)) L)⁻¹` for a sparse operator (dense result: its
-size is the square of the number of unknowns).
-
-**Inputs**
-- `cache` - `SparseCache`: linear cache of the whitened problem
-- `L` - `SmoothingOperator`: smoothing operator
-- `D` - `AbstractMatrix{<:Real}`: scaled weights `λ W` of the last linear solve
-
-**Outputs**
-- `Σ` - `Hermitian`: posterior covariance of `vec(u)`
-"""
-function posterior_covariance(c::SparseCache{T}, S::SmoothingOperator, D::AbstractMatrix{<:Real}) where {T}
-    F = cholesky(Hermitian(sparse_system_matrix(c, S, vec(D))))
-    n = size(c.H, 2)
-    return Hermitian(Matrix(F \ Matrix{T}(I, n, n)))
-end
-
 spectrum(c::SparseCache, S::SmoothingOperator, W::AbstractMatrix{<:Real}) =
-    throw(ArgumentError("the parameter choice rules (L-curve, GCV, Bayesian estimator) need the SVD of H, " *
-                        "which is not available for sparse operators: use a fixed λ, the multiplicative " *
-                        "or Bayesian formulations, and `init = Heuristic()` or a number"))
+    throw(ArgumentError("the parameter choice rules (L-curve, GCV, Bayesian estimator) need the SVD of H, which is not available for sparse operators: use a fixed λ, the multiplicative or Bayesian formulations, and `init = Heuristic()` or a number"))
 
 """
     normest(apply, apply_adjoint, x0; tol = 1e-6, maxiter = 100)
