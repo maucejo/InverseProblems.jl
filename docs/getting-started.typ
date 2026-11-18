@@ -17,9 +17,11 @@ include(isfile("_lib/setup.jl") ? "_lib/setup.jl" : "../_lib/setup.jl")
 
 #title()
 
-SourceEstimation.jl solves regularized linear inverse problems of the form
+`SourceEstimation.jl` solves regularized linear inverse problems of the form
 
-$ y = H u + n, $
+$
+  y = H u + n,
+$
 
 where $y$ gathers the measurements, $H$ is the forward operator (transfer functions, convolution matrix or any linear model), $u$ is the unknown source field and $n$ is the measurement noise. It is primarily intended for *force reconstruction* and *source identification* in structural dynamics and acoustics, but it can be used for any linear inverse problem.
 
@@ -147,6 +149,8 @@ Whatever the domain, the *rows* of the unknown are the reconstruction points and
 )
 
 As a consequence, `Groups`, smoothing operators and mixed norms `Lpq` have the same meaning in the time and frequency domains.
+
+The data can be *real* (e.g. time-domain problems) or *complex* (frequency-domain problems). The field is deduced from the element types of `H` and `y`, and the few formulas that depend on it — the probability distributions of the Bayesian formulation — are selected automatically. The #link("theory/inverse-problems.html")[theory pages] use a notation valid in both cases.
 
 = Next steps
 

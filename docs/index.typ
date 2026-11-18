@@ -4,7 +4,6 @@
 
 #set document(title: [SourceEstimation.jl])
 #metadata((
-  title: "Home",
   layout: "layouts/site-landing.html",
   description: "Regularized resolution of linear inverse problems in Julia: force reconstruction and source identification.",
 )) <website-metadata>
@@ -21,8 +20,8 @@ include(isfile("_lib/setup.jl") ? "_lib/setup.jl" : "../_lib/setup.jl")
 
 #hero(
   name: [SourceEstimation.jl],
-  text: [Regularized inverse problems, the Julia way],
-  tagline: [Reconstruct forces and identify sources from vibration or acoustic measurements. One verb, four nouns: describe the problem, choose a prior and a formulation, and `solve`.],
+  text: [Regularized inverse problems, the Julian way],
+  tagline: [Reconstruct forces and identify sources from vibration or acoustic measurements. One verb, four nouns: describe the problem, choose a prior and a formulation, and solve.],
   actions: (
     (label: [Get started], href: "getting-started.html", primary: true),
     (label: [Tutorials], href: "tutorials/point-force.html"),
@@ -125,7 +124,14 @@ fig
 #lead[This documentation was generated with the following Julia installation and package versions. All the code on this site is executed at build time.]
 
 ```julia
+#| eval: false
 versioninfo()
+```
+
+```julia
+#| echo: false
+# `versioninfo()` prints line by line and IJulia may send the first line as a separate stream message, rendered as a separate block: print the whole output at once.
+print(sprint(versioninfo))
 ```
 
 ```julia

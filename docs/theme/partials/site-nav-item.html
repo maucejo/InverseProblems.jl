@@ -1,0 +1,21 @@
+{#- Top menu item of the SourceEstimation.jl theme.
+
+    When a sidebar section has the same title as the menu item (Tutorials, Theory,
+    References), its pages are listed in a dropdown panel shown on hover or keyboard focus,
+    as in the Makie documentation. Other items are rendered as in the calepin theme. -#}
+{% set se_matches = (site.sidebar_sections or []) | selectattr("title", "eq", item.label) | list %}
+{% if se_matches %}
+{% set se_section = se_matches[0] %}
+                <li class="se-nav-dropdown">
+                    <a href="{{ item.href }}" aria-label="{{ item.label }}" aria-haspopup="true"{% if item.active or se_section.active %} aria-current="page"{% endif %}>{{ item.label_html }}<svg class="se-nav-caret" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></a>
+                    <div class="se-nav-menu">
+                        <ul>
+                            {% for sub in se_section.items %}{% if sub.href %}
+                            <li><a href="{{ sub.href }}"{% if sub.active %} aria-current="page"{% endif %}>{{ sub.label_html }}</a></li>
+                            {% endif %}{% endfor %}
+                        </ul>
+                    </div>
+                </li>
+{% else %}
+                <li><a href="{{ item.href }}" aria-label="{{ item.label }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label_html }}</a></li>
+{% endif %}

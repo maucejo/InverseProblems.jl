@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Syntax theme of the SourceEstimation.jl documentation (Julia colors). Light and dark variants share the same scopes. -->
+<plist version="1.0"><dict>
+<key>name</key><string>SourceEstimation Dark</string>
+<key>settings</key><array>
+<dict><key>settings</key><dict>
+<key>background</key><string>#161618</string>
+<key>foreground</key><string>#e1e4e8</string>
+<key>caret</key><string>#e1e4e8</string>
+<key>selection</key><string>#2d3a5c</string>
+<key>lineHighlight</key><string>#1e1f24</string>
+</dict></dict>
+<dict>
+<key>name</key><string>Comment</string>
+<key>scope</key><string>comment, punctuation.definition.comment</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#8b949e</string>
+<key>fontStyle</key><string>italic</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Keyword</string>
+<key>scope</key><string>keyword, keyword.control, storage, storage.type, storage.modifier</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#ff7b72</string>
+<key>fontStyle</key><string>bold</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Keyword other</string>
+<key>scope</key><string>keyword.other</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#ff7b72</string>
+<key>fontStyle</key><string>bold</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Operator</string>
+<key>scope</key><string>keyword.operator</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#ff9a8f</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>String</string>
+<key>scope</key><string>string, punctuation.definition.string</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#7ee787</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Docstring</string>
+<key>scope</key><string>string.docstring, string.quoted.triple</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#7ee787</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Escape</string>
+<key>scope</key><string>constant.character.escape, keyword.operator.interpolation, punctuation.section.interpolation</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#56d4dd</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Number</string>
+<key>scope</key><string>constant.numeric</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#79a8ff</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Constant</string>
+<key>scope</key><string>constant.language, support.constant, constant.other, variable.other.constant</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#79a8ff</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Symbol</string>
+<key>scope</key><string>constant.other.symbol, string.unquoted.symbol</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#ffa657</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Function</string>
+<key>scope</key><string>entity.name.function, support.function, variable.function</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#d2a8ff</string>
+<key>fontStyle</key><string>bold</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Macro</string>
+<key>scope</key><string>variable.macro, punctuation.definition.macro, support.function.macro, entity.name.function.macro, keyword.other.macro</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#ffa657</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Type</string>
+<key>scope</key><string>support.type, entity.name.type, entity.other.inherited-class, storage.type.julia, support.class</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#56d4dd</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Parameter</string>
+<key>scope</key><string>variable.parameter</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#e1e4e8</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Punctuation</string>
+<key>scope</key><string>punctuation.section, punctuation.separator, meta.brace</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#adbac7</string>
+</dict>
+</dict>
+<dict>
+<key>name</key><string>Invalid</string>
+<key>scope</key><string>invalid</string>
+<key>settings</key><dict>
+<key>foreground</key><string>#ff7b72</string>
+</dict>
+</dict>
+</array>
+</dict></plist>

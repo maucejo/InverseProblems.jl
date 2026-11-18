@@ -1,7 +1,7 @@
 #import "/_lib/ui.typ": *
 #show: math-html
 
-#set document(title: [References])
+#set document(title: [Bibliography])
 #metadata((description: "Bibliography of the methods implemented in SourceEstimation.jl.")) <website-metadata>
 
 #title()
@@ -31,4 +31,4 @@ The methods implemented in SourceEstimation.jl have been developed and published
 
 The general background on discrete ill-posed problems can be found in @Hansen2010, and recent developments on high-dimensional Gaussian sampling in @Gilavert2015 @Vono2022.
 
-#bibliography("/refs.bib", title: [Bibliography], style: "ieee", full: true)
+#bibliography("/refs.bib", title: [All references], style: "ieee", full: true)

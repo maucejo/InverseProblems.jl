@@ -33,9 +33,7 @@ row (measurement point) for a matrix."""
 noise_variance(x::AbstractVector, snr_dB) = mean(abs2, x) / 10^(snr_dB / 10)
 noise_variance(x::AbstractMatrix, snr_dB) = vec(mean(abs2, x; dims = 2)) ./ 10^(snr_dB / 10)
 
-"""Block lower-triangular (Toeplitz) convolution matrix of size `(nm nt) × (nr nt)` acting on
-`vec(U)`, `U` being `nr × nt` (rows = points, columns = time steps). The impulse responses are
-computed mode by mode with StructuralVibration.jl: `h(t) = Σₙ ϕm,ₙ ϕr,ₙᵀ hₙ(t)`."""
+"""Block lower-triangular (Toeplitz) convolution matrix of size `(nm nt) × (nr nt)` acting on `vec(U)`, `U` being `nr × nt` (rows = points, columns = time steps). The impulse responses are computed mode by mode with StructuralVibration.jl: `h(t) = Σₙ ϕm,ₙ ϕr,ₙᵀ hₙ(t)`."""
 function convolution_matrix(ωn, ξ, ϕm, ϕr, t)
     nm, nr, nt = size(ϕm, 1), size(ϕr, 1), length(t)
     hmodes = [impulse_response(Sdof(1.0, ω / 2π, ξ), t) for ω in ωn]

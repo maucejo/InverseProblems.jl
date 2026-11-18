@@ -15,7 +15,7 @@ Regularization restores the well-posedness of the #link("inverse-problems.html")
 
 == $ell_q$ norms
 
-The basic term is the $ell_q$ (quasi-)norm of a linear transform of the unknown,
+The basic term is the $ell_q$ (quasi-)norm of a linear transform of the unknown ($|dot|$ is the absolute value for real data, the modulus for complex data),
 
 $ R(u) = norm(L u)_q^q = sum_i |(L u)_i|^q, quad 0 < q <= 2, $
 
@@ -84,7 +84,7 @@ Choosing the regularization parameter is the main difficulty of the additive for
 
 $ hat(u) = op("argmin")_u J(u) = norm(y - H u)_2^2 dot R(u). $ <eq-omr>
 
-Writing the first-order optimality condition $nabla_(u^*) J = 0$ with $nabla_(u^*) R = L^H W L u$ (see the #link("algorithms.html")[IR weights]) gives
+Writing the first-order optimality condition $nabla_(u^*) J = 0$ (gradient with respect to $u^*$: Wirtinger gradient for complex data, half the ordinary gradient for real data) with $nabla_(u^*) R = L^H W L u$ (see the #link("algorithms.html")[IR weights]) gives
 
 $ (H^H H + alpha L^H W L) u = H^H y, quad alpha = norm(y - H u)_2^2 / R(u). $
 

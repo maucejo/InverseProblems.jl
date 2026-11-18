@@ -25,6 +25,10 @@ typ = false
 minify = true
 search = "pagefind"
 
+# Syntax highlighting of the code blocks (Julia colors), light and dark variants
+highlight-light = "theme/syntax/light.tmTheme"
+highlight-dark = "theme/syntax/dark.tmTheme"
+
 [executables]
 python = ".venv/bin/python"
 
@@ -57,6 +61,11 @@ weight = 20
 target = "theory/inverse-problems.typ"
 label = "Theory"
 weight = 30
+
+[[menus.main]]
+target = "reference/api.typ"
+label = "References"
+weight = 40
 
 [[menus.social]]
 target = "https://github.com/maucejo/SourceEstimation.jl"
@@ -122,3 +131,12 @@ title = "Theory"
 
   [[sidebar.section.item]]
   target = "theory/references.typ"
+
+[[sidebar.section]]
+title = "References"
+
+  [[sidebar.section.item]]
+  target = "reference/api.typ"
+
+  [[sidebar.section.item]]
+  target = "reference/release-notes.typ"

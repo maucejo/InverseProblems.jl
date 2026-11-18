@@ -17,7 +17,7 @@ At the fixed point of the IR algorithm, the posterior distribution of the source
 
 $ Q = tau_n A, quad A = H^H H + L^H D L, $ <eq-precision>
 
-where $H$ is the whitened operator, $D = lambda W$ contains the IR weights of the last linear solve and $tau_n$ is the noise precision ($tau_n = 1$ for the additive and multiplicative formulations, $R$ being then taken as the exact covariance). The approximation is exact for quadratic priors ($q = 2$) with fixed hyperparameters.
+where $H$ is the whitened operator (real or complex, $A^H$ being the transpose or the conjugate transpose, so that $A$ is symmetric or Hermitian positive definite), $D = lambda W$ contains the IR weights of the last linear solve and $tau_n$ is the noise precision ($tau_n = 1$ for the additive and multiplicative formulations, $R$ being then taken as the exact covariance). The approximation is exact for quadratic priors ($q = 2$) with fixed hyperparameters.
 
 = Precision rather than covariance
 

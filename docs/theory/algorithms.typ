@@ -9,7 +9,7 @@
 
 #title()
 
-All the formulations of SourceEstimation.jl lead to the same computational kernel: a sequence of weighted Tikhonov problems. This page describes the iteratively reweighted algorithm, the resolution strategies of space–frequency and space–time problems, and the linear solvers.
+All the formulations of SourceEstimation.jl lead to the same computational kernel: a sequence of weighted Tikhonov problems. The data may be real or complex: with the notations of the #link("inverse-problems.html")[first page] ($A^H$ is the transpose for real data, the conjugate transpose for complex data), all the formulas below hold in both cases. This page describes the iteratively reweighted algorithm, the resolution strategies of space–frequency and space–time problems, and the linear solvers.
 
 = Iteratively reweighted algorithm
 
@@ -28,7 +28,7 @@ The iterations stop when the relative variation $norm(U^((k+1)) - U^((k)))_1 sla
 
 == Weights from the optimality condition
 
-The weights are such that $partial R slash partial v_(i j)^* = W_(i j) v_(i j)$, which turns the non-quadratic penalty into a sequence of quadratic ones:
+The weights are such that $partial R slash partial v_(i j)^* = W_(i j) v_(i j)$, where $partial slash partial v^*$ is the Wirtinger derivative for complex data and half the ordinary derivative for real data (see the #link("inverse-problems.html")[notations]). This turns the non-quadratic penalty into a sequence of quadratic ones, with the same (real, positive) weights in both cases:
 
 $ "Lq": W_i = q/2 max(epsilon, |v_i|)^(q-2), $
 $ "Lpq": W_(i j) = q/2 max(epsilon^p, S_i)^(q slash p - 1) max(epsilon, |v_(i j)|)^(p - 2), quad S_i = sum_j |v_(i j)|^p. $

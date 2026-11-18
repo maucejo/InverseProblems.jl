@@ -1,11 +1,17 @@
 // UI components of the SourceEstimation.jl documentation (HTML target).
-// Styles live in theme/css/90_sourceestimation.css.
+// Styles live in theme/css/sourceestimation.css.
 
-// Generic HTML element with an optional class
-#let el(tag, class: none, attrs: (:), body) = {
-  let a = attrs
-  if class != none { a.insert("class", class) }
-  html.elem(tag, attrs: a, body)
+// Generic HTML element with an optional class. Outside of the HTML target (e.g. the query
+// pass of Calepin, which collects the labels and headings of the page), the body is returned
+// as is, so that the labels and headings it contains are not lost.
+#let el(tag, class: none, attrs: (:), body) = context {
+  if target() == "html" {
+    let a = attrs
+    if class != none { a.insert("class", class) }
+    html.elem(tag, attrs: a, body)
+  } else {
+    body
+  }
 }
 
 // <div class="…"> with an optional inline style
@@ -120,6 +126,26 @@
   }
 }
 
+// Fences of the inline (MathML) equations. Browsers stretch the fences (parentheses,
+// brackets, bars) to the height of their content, and with the large ascent/descent of
+// the math italic letters they pick an enlarged glyph with wide side bearings, which
+// looks like spaces around the content: (μ, Σ) → ( μ, Σ ). Typst cannot emit
+// `stretchy="false"`, so this script sets it, except when the fence encloses tall
+// content (fraction, limits, root, matrix), where stretching is needed.
+#let _fence-script = "document.addEventListener('DOMContentLoaded', function () {
+  var fences = '()[]{}|‖⟨⟩⌊⌋⌈⌉';
+  var tall = 'mfrac, munder, mover, munderover, msqrt, mroot, mtable';
+  document.querySelectorAll('math mo').forEach(function (mo) {
+    if (fences.indexOf(mo.textContent.trim()) < 0) return;
+    var row = mo.parentElement;
+    if (row && !row.querySelector(tall)) mo.setAttribute('stretchy', 'false');
+  });
+});"
+
+#let _math-fences() = context {
+  if target() == "html" { el("script", _fence-script) }
+}
+
 #let math-html(body) = {
   // Font of the SVG equations (Typst draws the glyphs, so it only has to be
   // installed where `calepin compile` runs). Inline MathML uses the web font
@@ -147,5 +173,6 @@
     } else { it }
   }
   _math-font-face()
+  _math-fences()
   body
 }

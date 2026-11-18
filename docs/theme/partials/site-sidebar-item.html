@@ -1,0 +1,9 @@
+{#- Sidebar item of the SourceEstimation.jl theme: as in the calepin theme, but the home page
+    is labelled "Home" (the item whose label is the title of the site). (Setting `title` in the <website-metadata> of index.typ would also
+    rename it, but it makes Calepin ignore the landing layout of the page.) -#}
+{% if item.href %}
+{% set se_home = item.label == site.title %}
+<li class="calepin-website-sidebar-link"><a href="{{ item.href }}" aria-label="{% if se_home %}Home{% else %}{{ item.label }}{% endif %}"{% if item.active %} class="active" aria-current="page"{% endif %}>{% if se_home %}Home{% else %}{{ item.label_html }}{% endif %}</a></li>
+{% else %}
+<li class="calepin-website-sidebar-subheading"><span>{{ item.label_html }}</span></li>
+{% endif %}

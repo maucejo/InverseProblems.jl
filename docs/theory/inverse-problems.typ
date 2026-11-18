@@ -11,13 +11,32 @@
 
 This page introduces the class of problems addressed by SourceEstimation.jl and explains why a naive inversion fails. The next pages describe the #link("regularization.html")[regularization strategies], their #link("bayesian.html")[Bayesian interpretation], the #link("algorithms.html")[algorithms] and the #link("uncertainty.html")[posterior uncertainty].
 
+= Real or complex data
+
+Depending on the problem, the data and the unknowns are *real* (time domain, static or real modal problems) or *complex* (frequency domain). SourceEstimation.jl handles both with the same code: the field is deduced from the element types of `H` and `y` (`Float64` or `ComplexF64`), and the formulas that depend on it — essentially the probability distributions of the #link("bayesian.html")[Bayesian model] — are selected by dispatch. All the pages of this section use the following conventions, valid in both cases.
+
+#table(
+  columns: (auto, 1fr, 1fr),
+  align: left,
+  table.header([*Notation*], [*Real data*], [*Complex data*]),
+  [$bb(K)$], [$bb(R)$], [$bb(C)$],
+  [$x^*$], [$x$], [complex conjugate],
+  [$A^H$], [transpose $A^T$], [conjugate transpose $(A^*)^T$],
+  [$|x|$], [absolute value], [modulus],
+  [$norm(x)_2^2 = x^H x$], [$sum_i x_i^2$], [$sum_i |x_i|^2$],
+  [$partial f slash partial x^*$], [$1/2 partial f slash partial x$], [Wirtinger derivative $1/2 (partial f slash partial a + i partial f slash partial b)$, $x = a + i b$],
+  [$cal(N)(mu, Sigma)$], [real Gaussian], [circular complex Gaussian],
+)
+
+With these conventions, the normal equations, the IR weights and the posterior precision have the same expression for real and complex data; only the constants of the Bayesian model differ.
+
 = Forward models
 
-Source identification consists in recovering the excitation $u$ of a system from measurements $y$ of its response. For a linear system, the measurements are related to the sources by a linear forward operator $H$,
+Source identification consists in recovering the excitation $u in bb(K)^(n)$ of a system from measurements $y in bb(K)^(m)$ of its response. For a linear system, the measurements are related to the sources by a linear forward operator $H in bb(K)^(m times n)$,
 
 $ y = H u + n, $ <eq-model>
 
-where $n$ is the measurement noise. The structure of $H$ depends on the domain.
+where $n in bb(K)^m$ is the measurement noise. The structure of $H$ depends on the domain.
 
 == Frequency domain
 
@@ -41,13 +60,13 @@ which defines a block lower-triangular Toeplitz matrix $H in bb(R)^(n_m n_t time
 
 == A common layout
 
-In both domains, the unknown is a matrix $U$ of size $n_r times n_s$ whose *rows* are the reconstruction points (space) and whose *columns* are the samples (frequencies or time steps); a single-frequency problem has $n_s = 1$. Global vectors are stacked sample by sample, $u = "vec"(U)$, i.e. $u_(i + (j-1) n_r) = U_(i j)$. This convention gives the same meaning to groups, smoothing operators and mixed norms in all domains.
+In both domains, the unknown is a matrix $U in bb(K)^(n_r times n_s)$ whose *rows* are the reconstruction points (space) and whose *columns* are the samples (frequencies or time steps); a single-frequency problem has $n_s = 1$. Global vectors are stacked sample by sample, $u = "vec"(U)$, i.e. $u_(i + (j-1) n_r) = U_(i j)$. This convention gives the same meaning to groups, smoothing operators and mixed norms in all domains.
 
 = Ill-posedness
 
 == Singular value decomposition
 
-Let $H = sum_i sigma_i v_i w_i^H$ be the singular value decomposition of $H$, with $sigma_1 >= sigma_2 >= dots >= sigma_r > 0$. The least-squares solution of @eq-model is
+Let $H = sum_i sigma_i v_i w_i^H$ be the singular value decomposition of $H$ (real or complex singular vectors $v_i$, $w_i$, real singular values), with $sigma_1 >= sigma_2 >= dots >= sigma_r > 0$. The least-squares solution of @eq-model is
 
 $ hat(u)_"LS" = sum_(i=1)^r (v_i^H y) / sigma_i w_i = u + sum_(i=1)^r (v_i^H n) / sigma_i w_i. $ <eq-ls>
 
@@ -63,7 +82,7 @@ where the filter factors $f_i in [0, 1]$ damp the components dominated by noise.
 
 = Noise
 
-The noise is assumed Gaussian, centered, with a known *diagonal* covariance $R$ (up to a scale factor, see the #link("bayesian.html")[Bayesian formulation]). The data fidelity is then the weighted least-squares term
+The noise is assumed Gaussian and centered — real Gaussian for real data, circular complex Gaussian for complex data — with a known *diagonal* covariance $R$ (real, positive) (up to a scale factor, see the #link("bayesian.html")[Bayesian formulation]). The data fidelity is then the weighted least-squares term
 
 $ norm(y - H u)_(R^(-1))^2 = (y - H u)^H R^(-1) (y - H u). $
 
