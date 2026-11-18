@@ -5,22 +5,16 @@
 #
 #     Q = τn A,    A = Hᴴ H + Lᴴ D L        (whitened H, D = λ W: weights of the last solve)
 #
-# (exact for q = 2; τn = 1 for the additive and multiplicative formulations, R being then taken
-# as the exact noise covariance). The precision is returned as is — sparse for an assembled
-# space–frequency problem, one block per sample for independent / block-diagonal samples,
-# dense otherwise —, and the covariance Q⁻¹ is never formed by default:
-#
-# * samples (perturbation–optimization): if ε₁ ~ N(0, I) (data size) and ε₂ ~ N(0, I) (size of
-#   L u) — circular complex normal for complex data —, then
-#
-#       δ = A⁻¹ (Hᴴ ε₁ + Lᴴ D^{1/2} ε₂)
-#
-#   has the covariance A⁻¹ (Hᴴ H + Lᴴ D L) A⁻¹ = A⁻¹, so that u + δ / √τn is a sample of the
-#   posterior. Each sample costs one application of A⁻¹, with the factorization used by the
-#   solver (normal equations, Woodbury identity, sparse Cholesky, block by block);
-# * marginal standard deviations and covariances: diagonal blocks of A⁻¹ (one per sample), each
-#   computed by applying A⁻¹ to the corresponding columns of the identity (block solves).
-
+# (exact for q = 2; τn = 1 for the additive and multiplicative formulations, R being then taken as the exact noise covariance). The precision is returned as is — sparse for an assembled space–frequency problem, one block per sample for independent / block-diagonal samples, dense otherwise —, and the covariance Q⁻¹ is never formed by default:
+# * samples, by dispatch on the factorization of A used by the solver:
+#   - Cholesky factor available (normal equations, sparse Cholesky): standard sampling
+#     δ = R⁻¹ z, A = Rᴴ R (one triangular solve per sample; P'·(…) for CHOLMOD);
+#   - Woodbury identity (under-determined problems, no Cholesky factor of A): perturbation–
+#     optimization, δ = A⁻¹ (Hᴴ ε₁ + Lᴴ D^{1/2} ε₂) with ε₁ ~ N(0, I) (data size) and
+#     ε₂ ~ N(0, I) (size of L u), whose covariance is A⁻¹ (Hᴴ H + Lᴴ D L) A⁻¹ = A⁻¹;
+#   z, ε₁, ε₂ are circular complex normal for complex data, and u + δ / √τn is a sample of the
+#   posterior;
+# * marginal standard deviations and covariances: diagonal blocks of A⁻¹ (one per sample), each computed by applying A⁻¹ to the corresponding columns of the identity (block solves).
 """
 Factorization of `A = Hᴴ H + D` (`D` diagonal) by the Woodbury identity, on the standard form
 `H̃ = H L⁻¹` for a square invertible smoothing operator:
@@ -187,20 +181,29 @@ function posterior_output(r::PosteriorRequest, c, S, D, τn)
     return precision_matrix(c, S, Dm, τn), post
 end
 
-# Samples (perturbation–optimization) ----------------------------------------------------------
+# Samples -----------------------------------------------------------------------------------
+#
+# k samples δ / √τn of the centered posterior N(0, (τn A)⁻¹), as columns, by dispatch on the factorization of A.
 
-# Lᴴ X for X with the layout of vec(L U)
-adjoint_apply(c, ::IdentitySmoothing, X) = X
-adjoint_apply(c, S::MatrixSmoothing, X) = global_operator(c, S)' * X
+# Cholesky factor of A available: standard sampling δ = R⁻¹ z, A = Rᴴ R (dense Cholesky)
+centered_samples(rng, c, S, D, F::Cholesky, τn, k) = (F.U \ randn(rng, eltype(c), size(F, 1), k)) ./ sqrt(τn)
 
-# k samples δ = A⁻¹ (Hᴴ ε₁ + Lᴴ D^{1/2} ε₂) / √τn of the centered posterior, as columns
-function centered_samples(rng, c::Union{DenseCache,SparseCache}, S, D, F, τn, k)
+# Sparse Cholesky A = (P'L)(L'P) (fill-reducing permutation P): δ = (L'P)⁻¹ z
+centered_samples(rng, c, S, D, F::SparseArrays.CHOLMOD.Factor, τn, k) = (F.UP \ randn(rng, eltype(c), size(F, 1), k)) ./ sqrt(τn)
+
+# Woodbury identity (no Cholesky factor of A): perturbation–optimization,
+# δ = A⁻¹ (Hᴴ ε₁ + Lᴴ D^{1/2} ε₂), Cov(δ) = A⁻¹ (Hᴴ H + Lᴴ D L) A⁻¹ = A⁻¹
+function centered_samples(rng, c, S, D, F::WoodburyFactor, τn, k)
     T = eltype(c)
     E1 = randn(rng, T, size(c.H, 1), k)
     E2 = randn(rng, T, length(D), k)
     B = c.H' * E1 + adjoint_apply(c, S, sqrt.(vec(D)) .* E2)
     return inverse_apply(F, B) ./ sqrt(τn)
 end
+
+# Lᴴ X for X with the layout of vec(L U)
+adjoint_apply(c, ::IdentitySmoothing, X) = X
+adjoint_apply(c, S::MatrixSmoothing, X) = global_operator(c, S)' * X
 
 function draw_posterior(rng, P::Posterior{<:Union{DenseCache,SparseCache}}, μ, k)
     X = centered_samples(rng, P.c, P.S, P.D, P.F, P.τn, k)

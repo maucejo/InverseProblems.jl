@@ -3,9 +3,7 @@
 """
     posterior_std(sol)
 
-Posterior standard deviation of each entry of the solution: square root of the diagonal of
-the posterior covariance `Q⁻¹`, obtained from its diagonal blocks (block solves, see
-[`posterior_covariance`](@ref)) — `Q⁻¹` is never formed.
+Posterior standard deviation of each entry of the solution: square root of the diagonal of the posterior covariance `Q⁻¹`, obtained from its diagonal blocks (block solves, see [`posterior_covariance`](@ref)) — `Q⁻¹` is never formed.
 
 **Inputs**
 - `sol` - `InverseSolution`: solution obtained with `solve(...; precision = true)`
@@ -21,11 +19,7 @@ posterior_std(sol::InverseSolution) =
 
 Posterior covariance `Q⁻¹` of the solution, computed from the factorization of the precision.
 
-* `full = false`: marginal covariances of the samples (frequencies or time steps), i.e. the
-  `nr × nr` diagonal blocks `Σ_jj` of the covariance of `vec(u)`. Each block is obtained by
-  applying `A⁻¹` to the `nr` corresponding columns of the identity (block solves with the
-  factorization of the solver: normal equations, Woodbury identity, sparse Cholesky), so that
-  the `n × n` covariance is never formed;
+* `full = false`: marginal covariances of the samples (frequencies or time steps), i.e. the `nr × nr` diagonal blocks `Σ_jj` of the covariance of `vec(u)`. Each block is obtained by applying `A⁻¹` to the `nr` corresponding columns of the identity (block solves with the factorization of the solver: normal equations, Woodbury identity, sparse Cholesky), so that the `n × n` covariance is never formed;
 * `full = true`: covariance of `vec(u)`, `(nr·ns) × (nr·ns)`, with the correlations between
   samples (sparse block-diagonal matrix when the samples are independent or block-diagonal).
 
@@ -34,8 +28,7 @@ Posterior covariance `Q⁻¹` of the solution, computed from the factorization o
 - `full` - `Bool`: full covariance instead of the marginal blocks
 
 **Outputs**
-- `Σ` - `Hermitian` (single sample, or `full = true`), `Vector{<:Hermitian}` (one block per
-  sample) or `SparseMatrixCSC` (`full = true`, independent samples)
+- `Σ` - `Hermitian` (single sample, or `full = true`), `Vector{<:Hermitian}` (one block per sample) or `SparseMatrixCSC` (`full = true`, independent samples)
 """
 function posterior_covariance(sol::InverseSolution; full::Bool = false)
     P = posterior_model(sol)
@@ -47,16 +40,16 @@ end
 """
     posterior_samples(sol, nsamples = 10_000; rng = Random.default_rng())
 
-Samples of the Gaussian approximation of the posterior `N(u, Q⁻¹)` (circular complex normal
-for complex unknowns), drawn by **perturbation–optimization**: with `A = Hᴴ H + Lᴴ D L`
-(`Q = τn A`) and `ε₁ ~ N(0, I)`, `ε₂ ~ N(0, I)` of the sizes of the data and of `L u`,
+Samples of the Gaussian approximation of the posterior `N(u, Q⁻¹)` (circular complex normal for complex unknowns), with `Q = τn A`, `A = Hᴴ H + Lᴴ D L`. The sampler is chosen by dispatch on the factorization of `A` used by the solver:
 
-    u_sample = u + A⁻¹ (Hᴴ ε₁ + Lᴴ D^{1/2} ε₂) / √τn,
+* Cholesky factor `A = Rᴴ R` available (normal equations, sparse Cholesky): **standard sampling** `u_sample = u + R⁻¹ z / √τn`, `z ~ N(0, I)` — one triangular solve per sample (`R⁻¹ R⁻ᴴ = A⁻¹`; with a lower factor `A = L Lᴴ`, this reads `L⁻ᴴ z`);
+* Woodbury identity (under-determined problems, no Cholesky factor of `A`): **perturbation–optimization**, with `ε₁ ~ N(0, I)`, `ε₂ ~ N(0, I)` of the sizes of the data and of `L u`,
 
-whose covariance is `A⁻¹ (Hᴴ H + Lᴴ D L) A⁻¹ / τn = Q⁻¹`. Each sample costs one application of
-`A⁻¹` with the factorization of the solver (normal equations, Woodbury identity, sparse
-Cholesky, block by block), without factorizing `Q` nor forming `Q⁻¹`; the joint samples keep
-the correlations between frequencies or time steps.
+      u_sample = u + A⁻¹ (Hᴴ ε₁ + Lᴴ D^{1/2} ε₂) / √τn,
+
+  whose covariance is `A⁻¹ (Hᴴ H + Lᴴ D L) A⁻¹ / τn = Q⁻¹`, at the cost of one application of `A⁻¹` (Woodbury) per sample, without forming nor factorizing the `n × n` matrix `A`.
+
+Both give exact samples of `N(u, Q⁻¹)`; the joint samples keep the correlations between frequencies or time steps (block-diagonal problems are sampled block by block).
 
 **Inputs**
 - `sol` - `InverseSolution`: solution obtained with `solve(...; precision = true)`

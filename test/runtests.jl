@@ -293,7 +293,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test posterior_std(a) ≈ reshape(sqrt.(real(diag(Σb))), nr, nf)
         lo, up = credible_interval(a; nsamples = 200)
         @test size(lo) == (nr, nf)
-        # joint samples (perturbation–optimization): empirical covariance → full covariance
+        # joint samples (sparse Cholesky R⁻¹ z): empirical covariance → full covariance
         X = reshape(posterior_samples(a, 40_000; rng = Xoshiro(2)), nr * nf, :)
         Xc = X .- vec(a.u)
         @test isapprox(Xc * Xc' / size(X, 2), Σb; rtol = 0.05)
@@ -374,9 +374,19 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test_throws ArgumentError Additive(Lq(1.0); λ = LambdaMax())
     end
 
-    @testset "Posterior precision and perturbation–optimization" begin
+    @testset "Posterior precision and sampling (Cholesky / perturbation–optimization)" begin
         IP = SourceEstimation
         Random.seed!(15)
+        # over-determined problems (dense Cholesky): standard sampling u + R⁻¹ z / √τn
+        for T in (Float64, ComplexF64)
+            H, y = randn(T, 12, 6), randn(T, 12)
+            s = solve(InverseProblem(H, y), Additive(Lq(2.0); λ = 0.5); precision = true)
+            @test s.posterior.F isa LinearAlgebra.Cholesky
+            Σ = solve_identity(Matrix(s.precision))
+            X = posterior_samples(s, 60_000; rng = Xoshiro(4))
+            Xc = X .- s.u
+            @test isapprox(Xc * Xc' / size(X, 2), Σ; rtol = 0.05)
+        end
         # under-determined problems (Woodbury identity), with L = I and an invertible L
         for T in (Float64, ComplexF64), Lt in (Lq(2.0), Lq(2.0; L = diff_operator(12, 1) + 0.5I))
             H, y = randn(T, 6, 12), randn(T, 6)

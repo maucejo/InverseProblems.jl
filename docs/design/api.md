@@ -276,20 +276,28 @@ Bayesian(Lq(2.0); τn = 1.0, τs = 0.5, q = Fixed())      # tout fixé : posteri
   factorisation par bloc. Les quantités a posteriori sont calculées à la demande, en
   appliquant `A⁻¹` à des blocs de seconds membres (`inverse_apply`) :
 
-* `posterior_samples(sol, n; rng)` — tirages par **perturbation–optimisation**. Avec
-  `ε₁ ~ N(0, I)` (taille des données) et `ε₂ ~ N(0, I)` (taille de `L u`), lois normales
-  complexes circulaires en complexe,
+* `posterior_samples(sol, n; rng)` — tirages exacts de `N(u, Q⁻¹)`, la méthode étant
+  choisie par **dispatch sur la factorisation de `A`** :
+  - facteur de Cholesky `A = Rᴴ R` disponible (équations normales denses, CHOLMOD) :
+    **tirage standard** `u_s = u + R⁻¹ z / √τn`, `z ~ N(0, I)` (une résolution triangulaire
+    par tirage ; `R⁻¹ R⁻ᴴ = A⁻¹`. Avec le facteur inférieur `A = L Lᴴ`, c'est `L⁻ᴴ z`, i.e.
+    `L' \ z` ; avec CHOLMOD, `F.UP \ z` tient compte de la permutation) ;
+  - identité de Woodbury (régime sous-déterminé, pas de Cholesky de `A`) :
+    **perturbation–optimisation**. Avec `ε₁ ~ N(0, I)` (taille des données) et
+    `ε₂ ~ N(0, I)` (taille de `L u`), lois normales complexes circulaires en complexe,
 
-      u_s = u + A⁻¹ (H̃ᴴ ε₁ + Lᴴ D^{1/2} ε₂) / √τn
+        u_s = u + A⁻¹ (H̃ᴴ ε₁ + Lᴴ D^{1/2} ε₂) / √τn
 
-  a pour covariance `A⁻¹ (H̃ᴴH̃ + LᴴDL) A⁻¹ / τn = A⁻¹ / τn = Q⁻¹` : c'est un tirage exact de
-  `N(u, Q⁻¹)`. `u_s` est la solution du problème de Tikhonov pondéré dont les données et
-  l'a priori sont perturbés (d'où le nom), et chaque tirage coûte une application de `A⁻¹`
-  avec la factorisation du solveur, **sans factoriser `Q` ni former `Q⁻¹`**. L'avantage de
-  Woodbury est conservé dans le régime sous-déterminé (coût `O(nm·nr)` par tirage au lieu
-  d'un Cholesky `nr × nr`), et les tirages joints conservent les corrélations entre
-  fréquences ou instants. Pour des fréquences indépendantes ou bloc-diagonales, les tirages
-  sont faits fréquence par fréquence.
+    a pour covariance `A⁻¹ (H̃ᴴH̃ + LᴴDL) A⁻¹ / τn = A⁻¹ / τn = Q⁻¹`. `u_s` est la solution
+    du problème de Tikhonov pondéré dont les données et l'a priori sont perturbés (d'où le
+    nom). Chaque tirage coûte une application de `A⁻¹` par Woodbury (`O(nm·nr)`), **sans
+    former ni factoriser la matrice `nr × nr`**.
+
+  Les tirages joints (cas assemblé) conservent les corrélations entre fréquences ou
+  instants ; pour des fréquences indépendantes ou bloc-diagonales, ils sont faits fréquence
+  par fréquence. Références : Orieux, Féron & Giovannelli (IEEE SPL 2012), Papandreou &
+  Yuille (NIPS 2010), Gilavert, Moussaoui & Idier (IEEE TSP 2015), Vono, Dobigeon & Chainais
+  (SIAM Review 2022) — voir `implementation.typ`.
 * `posterior_covariance(sol; full = false)` — **solves par blocs** : le bloc diagonal `Σ_jj`
   (`nr × nr`) de la fréquence ou de l'instant `j` est obtenu en appliquant `A⁻¹` aux `nr`
   colonnes correspondantes de l'identité, `Σ_jj = (A⁻¹ E_j)[lignes de j, :] / τn`, avec la
@@ -493,7 +501,7 @@ src/
 │   ├── fdiff.jl            # opérateurs de différences finies : fd_weights, diff_operator
 │   ├── weights.jl          # poids IR (reweight!), paramètre d'amortissement ε, valeurs des pénalités
 │   ├── bayes.jl            # modèle bayésien réel / complexe, lois conditionnelles
-│   ├── posterior.jl        # précision a posteriori, factorisation, perturbation–optimisation, solves par blocs
+│   ├── posterior.jl        # précision a posteriori, factorisation, tirages (Cholesky / perturbation–optimisation), solves par blocs
 │   └── uncertainty.jl      # posterior_std, posterior_covariance, posterior_samples, credible_interval
 └── solvers/                # algorithmes de résolution
     ├── ir.jl               # IR : formulations additive et multiplicative
