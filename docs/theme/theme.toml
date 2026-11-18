@@ -1,0 +1,3 @@
+# SourceEstimation.jl theme: the bundled "calepin" documentation theme with a
+# VitePress-like skin in the Julia colors (css/90_sourceestimation.css).
+extends = "calepin"

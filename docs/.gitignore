@@ -1,0 +1,5 @@
+_site/
+.calepin/
+_calepin/
+.venv/
+__pycache__/

@@ -1,0 +1,676 @@
+/* SourceEstimation.jl — VitePress-like skin in the Julia colors.
+ *
+ * Julia palette: blue #4063D8, green #389826, purple #9558B2, red #CB3C33.
+ * Only the public --calepin-* tokens and a few landing-page components are styled here. */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+:root {
+  --julia-blue: #4063D8;
+  --julia-green: #389826;
+  --julia-purple: #9558B2;
+  --julia-red: #CB3C33;
+
+  --calepin-font-body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --calepin-font-heading: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --calepin-font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --calepin-color-background: #ffffff;
+  --calepin-color-text: #213547;
+  --calepin-color-muted: #5c6b7f;
+  --calepin-color-border: #e2e6ee;
+  --calepin-color-accent: #4063D8;
+  --calepin-color-accent-hover: #3451b8;
+  --calepin-color-accent-strong: #4063D8;
+  --calepin-color-accent-strong-hover: #3451b8;
+  --calepin-color-accent-contrast: #ffffff;
+  --calepin-color-important: #9558B2;
+  --calepin-color-success: #389826;
+  --calepin-color-danger: #CB3C33;
+
+  --calepin-surface: #ffffff;
+  --calepin-surface-muted: #f6f7fb;
+  --calepin-surface-raised: #ffffff;
+  --calepin-surface-code: #f6f7fb;
+
+  --calepin-radius-sm: 6px;
+  --calepin-radius-md: 10px;
+  --calepin-radius-lg: 14px;
+
+  --se-hero-gradient: linear-gradient(120deg, #4063D8 15%, #9558B2 55%, #CB3C33 95%);
+  --se-glow: radial-gradient(circle at 50% 50%, rgba(64, 99, 216, 0.35), rgba(149, 88, 178, 0.28) 40%, rgba(56, 152, 38, 0.12) 65%, transparent 72%);
+  --se-card-bg: #f6f7fb;
+  --se-card-border: transparent;
+  --landing-hero-wordmark-width: 22rem;
+}
+
+html[data-theme="dark"] {
+  --calepin-color-background: #1b1b1f;
+  --calepin-color-text: #dfdfd6;
+  --calepin-color-muted: #98989f;
+  --calepin-color-border: #2e2e32;
+  --calepin-color-accent: #8aa2f0;
+  --calepin-color-accent-hover: #a8bbf5;
+  --calepin-color-accent-strong: #4063D8;
+  --calepin-color-accent-strong-hover: #5677e2;
+  --calepin-color-accent-contrast: #ffffff;
+  --calepin-color-important: #c193d8;
+  --calepin-color-success: #6cc35a;
+  --calepin-color-danger: #e5736b;
+  --calepin-surface: #1b1b1f;
+  --calepin-surface-muted: #202127;
+  --calepin-surface-raised: #222329;
+  --calepin-surface-inset: #161618;
+  --calepin-surface-code: #161618;
+  --calepin-surface-output: #202127;
+  --se-card-bg: #202127;
+  --se-card-border: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) {
+    --calepin-color-background: #1b1b1f;
+    --calepin-color-text: #dfdfd6;
+    --calepin-color-muted: #98989f;
+    --calepin-color-border: #2e2e32;
+    --calepin-color-accent: #8aa2f0;
+    --calepin-color-accent-hover: #a8bbf5;
+    --calepin-color-accent-strong: #4063D8;
+    --calepin-color-accent-strong-hover: #5677e2;
+    --calepin-color-accent-contrast: #ffffff;
+    --calepin-color-important: #c193d8;
+    --calepin-color-success: #6cc35a;
+    --calepin-color-danger: #e5736b;
+    --calepin-surface: #1b1b1f;
+    --calepin-surface-muted: #202127;
+    --calepin-surface-raised: #222329;
+    --calepin-surface-inset: #161618;
+    --calepin-surface-code: #161618;
+    --calepin-surface-output: #202127;
+    --se-card-bg: #202127;
+    --se-card-border: transparent;
+  }
+}
+
+body {
+  background: var(--calepin-color-background);
+  color: var(--calepin-color-text);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------- Top bar */
+
+.calepin-website-topbar {
+  border-bottom: 1px solid var(--calepin-color-border);
+  background: color-mix(in srgb, var(--calepin-color-background) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(10px);
+  -webkit-backdrop-filter: saturate(180%) blur(10px);
+}
+
+.calepin-website-topbar .calepin-site-logo {
+  height: 1.7rem;
+}
+
+.calepin-website-topbar nav a:not(.calepin-site-brand) {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.calepin-website-topbar nav a:not(.calepin-site-brand):hover,
+.calepin-website-topbar nav a:not(.calepin-site-brand).active,
+.calepin-website-topbar nav a:not(.calepin-site-brand)[aria-current] {
+  color: var(--calepin-color-accent);
+}
+
+/* Icons of the menu (GitHub): vertically centered on the text of the other items */
+.calepin-website-topbar nav li > a[aria-label="GitHub"],
+.calepin-website-topbar nav a .calepin-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.calepin-website-topbar nav a .calepin-nav-icon svg {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* ------------------------------------------------------------- Sidebar */
+
+.calepin-website-sidebar nav p,
+.calepin-website-sidebar-subheading {
+  color: var(--calepin-color-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.calepin-website-sidebar a {
+  font-size: 0.9rem;
+  color: var(--calepin-color-muted);
+  word-break: normal;
+}
+
+.calepin-website-sidebar a:hover,
+.calepin-website-sidebar a:focus {
+  color: var(--calepin-color-text);
+  background: transparent;
+}
+
+/* Same font weight for every state: a bolder active link would be wider and could
+   wrap onto a second line. The active link is marked by its color and background. */
+.calepin-website-sidebar a,
+.calepin-website-sidebar a.active,
+.calepin-website-sidebar a[aria-current] {
+  font-weight: 500;
+}
+
+.calepin-website-sidebar a.active,
+.calepin-website-sidebar a[aria-current] {
+  color: var(--calepin-color-accent);
+  background: color-mix(in srgb, var(--calepin-color-accent) 10%, transparent);
+}
+
+/* Sidebar: still scrollable when taller than the window, but without a visible scrollbar */
+.calepin-website-sidebar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.calepin-website-sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ------------------------------------------------------------- Content */
+
+.calepin-content h1,
+.calepin-website-main h1 {
+  font-size: 2.1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.calepin-website-main:not(.calepin-website-main--landing) h2 {
+  margin-top: 2.6rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--calepin-color-border);
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.calepin-website-main h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.calepin-website-main a:not(.landing-button):not(.se-card-link) {
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.calepin-website-main a:not(.landing-button):not(.se-card-link):hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.calepin-website-main p code,
+.calepin-website-main li code,
+.calepin-website-main td code {
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--calepin-color-accent) 9%, var(--calepin-surface-muted));
+  color: color-mix(in srgb, var(--calepin-color-accent) 70%, var(--calepin-color-text));
+  font-size: 0.86em;
+}
+
+.calepin-website-main pre {
+  border-radius: var(--calepin-radius-md);
+  border: 1px solid var(--calepin-color-border);
+}
+
+.calepin-website-main table {
+  font-size: 0.92rem;
+}
+
+.calepin-website-main figure img {
+  border-radius: var(--calepin-radius-md);
+}
+
+/* --------------------------------------------------------------- Hero */
+
+.se-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 2rem;
+  align-items: center;
+  padding: 2.5rem 0 3.5rem;
+}
+
+.se-hero-name {
+  margin: 0;
+  font-size: clamp(2.4rem, 6vw, 3.9rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  background: var(--se-hero-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.se-hero-text {
+  margin: 0.4rem 0 0;
+  font-size: clamp(1.6rem, 3.6vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--calepin-color-text);
+}
+
+.se-hero-tagline {
+  max-width: 36rem;
+  margin: 1.2rem 0 0;
+  font-size: 1.15rem;
+  line-height: 1.6;
+  color: var(--calepin-color-muted);
+}
+
+.se-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.se-hero .landing-button {
+  min-height: 2.6rem;
+  padding: 0 1.4rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.se-hero .landing-button-secondary {
+  background: var(--calepin-surface-muted);
+  border-color: var(--calepin-color-border);
+}
+
+.se-hero-image {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18rem;
+}
+
+.se-hero-image::before {
+  content: "";
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: var(--se-glow);
+  filter: blur(42px);
+}
+
+.se-hero-image img {
+  position: relative;
+  width: min(100%, 20rem);
+  height: auto;
+}
+
+.se-install {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.4rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--calepin-color-border);
+  border-radius: var(--calepin-radius-md);
+  background: var(--calepin-surface-muted);
+  font-family: var(--calepin-font-mono);
+  font-size: 0.85rem;
+  color: var(--calepin-color-text);
+}
+
+.se-install .se-prompt {
+  color: var(--julia-purple);
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------- Features */
+
+.se-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 0 3rem;
+}
+
+.se-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1.5rem;
+  border: 1px solid var(--se-card-border);
+  border-radius: var(--calepin-radius-lg);
+  background: var(--se-card-bg);
+  transition: border-color 0.25s, transform 0.25s;
+}
+
+.se-card:hover {
+  border-color: color-mix(in srgb, var(--calepin-color-accent) 55%, transparent);
+}
+
+a.se-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.se-card-link:hover .se-card {
+  transform: translateY(-2px);
+}
+
+.se-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1.1rem;
+  border-radius: 10px;
+  font-size: 1.5rem;
+  background: color-mix(in srgb, var(--se-icon, var(--julia-blue)) 14%, transparent);
+  color: var(--se-icon, var(--julia-blue));
+}
+
+.se-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--calepin-color-text);
+}
+
+.se-card-details {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--calepin-color-muted);
+}
+
+.se-card-details code {
+  font-size: 0.84em;
+}
+
+/* Next-steps cards (smaller, inside regular pages) */
+.se-next {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.9rem;
+  margin: 1.5rem 0;
+}
+
+.se-next .se-card {
+  padding: 1.1rem 1.2rem;
+}
+
+.se-next .se-card-icon {
+  width: 2.3rem;
+  height: 2.3rem;
+  margin-bottom: 0.7rem;
+  font-size: 1.15rem;
+}
+
+/* ---------------------------------------------------- Landing sections */
+
+.calepin-website-main--landing h2 {
+  margin-top: 3rem;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.se-section-lead {
+  max-width: 48rem;
+  color: var(--calepin-color-muted);
+  font-size: 1.02rem;
+}
+
+.se-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.se-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+}
+
+.se-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--se-icon, var(--julia-blue)) 13%, transparent);
+  color: var(--se-icon, var(--julia-blue));
+}
+
+html[data-theme="dark"] .se-badge,
+html[data-theme="dark"] .se-card-icon {
+  color: color-mix(in srgb, var(--se-icon, var(--julia-blue)) 60%, white);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .se-badge,
+  html:not([data-theme]) .se-card-icon {
+    color: color-mix(in srgb, var(--se-icon, var(--julia-blue)) 60%, white);
+  }
+}
+
+/* Inline references [1] in the theory pages */
+.calepin-website-main sup a,
+.calepin-website-main a[href^="#loc-"] {
+  color: var(--julia-purple);
+}
+
+@media (max-width: 60rem) {
+  .se-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 48rem) {
+  .se-hero {
+    grid-template-columns: 1fr;
+    padding-top: 1rem;
+    text-align: center;
+  }
+
+  .se-hero-image {
+    order: -1;
+    min-height: 12rem;
+  }
+
+  .se-hero-image img {
+    width: min(70%, 13rem);
+  }
+
+  .se-hero-tagline {
+    margin-inline: auto;
+  }
+
+  .se-hero-actions {
+    justify-content: center;
+  }
+
+  .se-features,
+  .se-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ------------------------------------------- Layout fixes (menu, sidebar) */
+
+/* Wider sidebar: every title fits on a single line */
+:root {
+  --calepin-sidebar-width: 15.5rem;
+}
+
+.calepin-website-sidebar a {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Menu items centered on a common axis (text links and icons) */
+.calepin-website-topbar nav ul > li:has(> a) {
+  display: flex;
+  align-items: center;
+}
+
+.calepin-website-topbar nav ul > li > a {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Math — block equations are SVG frames (see math-html in _lib/ui.typ),
+   inline equations are MathML (font declared by math-html)
+   --------------------------------------------------------------------------- */
+.mx-equation {
+  margin-block: 1.25em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+  font-size: 1.15em;   /* Typst frames use 11pt text: match the body copy */
+}
+
+.mx-equation > svg {
+  display: inline-block !important;   /* Typst sets display:block inline */
+  max-width: none;
+  vertical-align: middle;
+}
+
+/* Numbered equations: centered equation, number aligned on the right */
+.mx-equation.mx-numbered {
+  display: grid;
+  grid-template-columns: minmax(2.5em, 1fr) auto minmax(2.5em, 1fr);
+  align-items: center;
+  overflow-x: visible;
+}
+
+.mx-eq-body {
+  grid-column: 2;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.mx-eq-body > svg {
+  display: inline-block !important;
+  max-width: none;
+  vertical-align: middle;
+}
+
+.mx-eq-num {
+  grid-column: 3;
+  justify-self: end;
+  font-family: "XITS Math", "Cambria Math", serif;
+  font-size: 1.05em;
+}
+
+/* Typst paints glyphs black: follow the text colour (dark mode) */
+.mx-equation svg [fill="#000000"] { fill: currentColor; }
+.mx-equation svg [stroke="#000000"] { stroke: currentColor; }
+
+math {
+  font-family: "XITS Math", "Cambria Math", math;
+  font-size: 1.12em;
+}
+
+/* lift accents (dot, dot.double…) a little off the base letter */
+math mover[accent="true"] > :last-child {
+  padding-block-end: 0.12em;
+}
+
+/* Foldable sidebar sections (fold = true in calepin.toml): VitePress-like titles,
+   bold, sentence case, chevron on the right */
+.calepin-website-sidebar nav summary,
+.calepin-website-sidebar nav details[open] > summary {
+  margin: 0.6rem 0 0.2rem;
+  padding: 0.15rem 0;
+  border-radius: var(--calepin-radius-sm);
+  color: var(--calepin-color-text);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  transition: color 0.15s;
+}
+
+.calepin-website-sidebar nav details:first-child > summary {
+  margin-top: 0;
+}
+
+.calepin-website-sidebar nav summary:hover {
+  color: var(--calepin-color-accent);
+}
+
+.calepin-website-sidebar nav summary::after {
+  color: var(--calepin-color-muted);
+}
+
+.calepin-website-sidebar nav details,
+.calepin-website-sidebar nav details[open] {
+  margin-bottom: 0;
+}
+
+/* Pico colours the open <summary> through its accordion variable */
+.calepin-website-sidebar {
+  --pico-accordion-open-summary-color: var(--calepin-color-text);
+  --pico-accordion-active-summary-color: var(--calepin-color-accent);
+}
+
+/* Justified text in the pages (hyphenation avoids large gaps between words). The hero,
+   the cards, tables, code and the sidebar keep their alignment. */
+.calepin-website-main:not(.calepin-website-main--landing) :is(p, li, dd),
+.calepin-website-main--landing .se-section-lead,
+.calepin-website-main--landing .se-split li {
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+.calepin-website-main :is(td, th, figcaption, .se-card-details, .se-card-title, .mx-equation) {
+  text-align: inherit;
+  hyphens: manual;
+}
+
+/* "Home": first, untitled sidebar section, in bold like the section titles */
+.calepin-website-sidebar nav[aria-label="Documentation"] > ul > li > a {
+  color: var(--calepin-color-text);
+  font-weight: 700;
+}
+
+.calepin-website-sidebar nav[aria-label="Documentation"] > ul > li > a:hover {
+  color: var(--calepin-color-accent);
+}
+
+.calepin-website-sidebar nav[aria-label="Documentation"] > ul > li > a.active,
+.calepin-website-sidebar nav[aria-label="Documentation"] > ul > li > a[aria-current] {
+  color: var(--calepin-color-accent);
+}

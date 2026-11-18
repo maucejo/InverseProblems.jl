@@ -1,0 +1,124 @@
+# SourceEstimation.jl documentation, built with Calepin (Typst + executed Julia chunks).
+#
+#   uv sync  # Python bridge to the Jupyter (IJulia) kernel
+#   julia --project=. -e 'using Pkg; Pkg.instantiate()'
+#   calepin compile .                         # build into _site/
+#   calepin watch . _site --serve --open      # live preview
+#
+# See README.md for details.
+
+title = "SourceEstimation.jl"
+description = "Regularized resolution of linear inverse problems in Julia: force reconstruction and source identification in structural dynamics and acoustics."
+base-url = "https://maucejo.github.io/SourceEstimation.jl"
+
+theme = "./theme"
+logo = "assets/logo-nav.svg"
+logo-alt = "SourceEstimation.jl"
+favicon = "assets/favicon.svg"
+image = "assets/logo.svg"
+theme-color = "#4063D8"
+
+output-dir = "_site"
+asset-dir = "_calepin"   # GitHub Pages does not serve dot-directories
+pdf = false
+typ = false
+minify = true
+search = "pagefind"
+
+[executables]
+python = ".venv/bin/python"
+
+[static]
+include = ["assets/**"]
+
+# Helpers (Typst UI components, Julia scripts) are imported by pages, not published.
+[pages]
+exclude = ["_lib/**", "_site/**", ".venv/**", "README.md"]
+
+[toc]
+enabled = true
+depth = 2
+floating = true
+
+# ---------------------------------------------------------------------------
+# Navigation
+# ---------------------------------------------------------------------------
+[[menus.main]]
+target = "getting-started.typ"
+label = "Getting started"
+weight = 10
+
+[[menus.main]]
+target = "tutorials/point-force.typ"
+label = "Tutorials"
+weight = 20
+
+[[menus.main]]
+target = "theory/inverse-problems.typ"
+label = "Theory"
+weight = 30
+
+[[menus.social]]
+target = "https://github.com/maucejo/SourceEstimation.jl"
+label = "{icon:github}"
+aria-label = "GitHub"
+
+[footer]
+
+[[footer.item]]
+label = "Released under the MIT License · © 2026 Mathieu Aucejo"
+
+[[footer.item]]
+label = "Made with Calepin"
+target = "https://vincentarelbundock.github.io/calepin"
+
+[sidebar]
+fold = true
+
+# Untitled first section: "Home" stays visible, outside the foldable sections
+[[sidebar.section]]
+
+  [[sidebar.section.item]]
+  target = "index.typ"
+
+[[sidebar.section]]
+title = "Tutorials"
+
+  [[sidebar.section.item]]
+  target = "getting-started.typ"
+
+  [[sidebar.section.item]]
+  target = "tutorials/point-force.typ"
+
+  [[sidebar.section.item]]
+  target = "tutorials/groups.typ"
+
+  [[sidebar.section.item]]
+  target = "tutorials/space-frequency.typ"
+
+  [[sidebar.section.item]]
+  target = "tutorials/time-domain.typ"
+
+  [[sidebar.section.item]]
+  target = "tutorials/uncertainty.typ"
+
+[[sidebar.section]]
+title = "Theory"
+
+  [[sidebar.section.item]]
+  target = "theory/inverse-problems.typ"
+
+  [[sidebar.section.item]]
+  target = "theory/regularization.typ"
+
+  [[sidebar.section.item]]
+  target = "theory/bayesian.typ"
+
+  [[sidebar.section.item]]
+  target = "theory/algorithms.typ"
+
+  [[sidebar.section.item]]
+  target = "theory/uncertainty.typ"
+
+  [[sidebar.section.item]]
+  target = "theory/references.typ"

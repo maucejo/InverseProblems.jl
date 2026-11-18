@@ -1,2 +1,7 @@
 [deps]
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+SourceEstimation = "0a55c760-1160-4ed6-b9f1-b545e474d1f0"
+StructuralVibration = "85cedecc-ec67-4717-8ef3-ce3f1b8dc459"
 
+[sources]
+SourceEstimation = {path = ".."}

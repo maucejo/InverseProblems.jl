@@ -1,0 +1,48 @@
+{#- Sidebar section of the SourceEstimation.jl theme.
+
+    Same markup as the calepin partial, with two differences for the foldable sections:
+    - the class `se-sidebar-section` replaces `calepin-website-sidebar-section`, so that the
+      accordion of the calepin theme (opening a section closes the others) does not apply:
+      a click on a section title folds or unfolds that section only;
+    - the open/closed state of each section is saved in localStorage and restored on every
+      page, right after the section is parsed (no flash of the default state).
+-#}
+{% if section.items or section.sections %}
+{% set calepin_section_foldable = section.title and site.sidebar_fold %}
+{% if calepin_section_foldable %}
+<details class="se-sidebar-section{% if section.depth %} calepin-website-sidebar-subsection{% endif %}" data-calepin-sidebar-depth="{{ section.depth }}" data-se-section="{{ section.title }}"{% if section.active %} open{% endif %}>
+    <summary>{{ section.title }}</summary>
+{% elif section.title %}
+<p{% if section.depth %} class="calepin-website-sidebar-subsection-title"{% endif %}><strong>{{ section.title }}</strong></p>
+{% endif %}
+{% if section.items %}
+<ul>
+    {% for item in section.items %}
+    {% include "partials/site-sidebar-item.html" %}
+    {% endfor %}
+</ul>
+{% endif %}
+{% for subsection in section.sections %}
+{% with section = subsection %}
+{% include "partials/site-sidebar-section.html" %}
+{% endwith %}
+{% endfor %}
+{% if calepin_section_foldable %}
+</details>
+<script>
+(function (section) {
+  var KEY = "se-sidebar-sections";
+  var name = section.getAttribute("data-se-section");
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+  if (Object.prototype.hasOwnProperty.call(state, name)) section.open = state[name];
+  section.addEventListener("toggle", function () {
+    var current = {};
+    try { current = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+    current[name] = section.open;
+    try { localStorage.setItem(KEY, JSON.stringify(current)); } catch (e) {}
+  });
+})(document.currentScript.previousElementSibling);
+</script>
+{% endif %}
+{% endif %}
