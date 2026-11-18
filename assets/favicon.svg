@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 -10 196 196" role="img" aria-label="SourceEstimation.jl logo"><title>SourceEstimation.jl</title>
+<defs><linearGradient id="seb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4063D8"/><stop offset="1" stop-color="#7B93EC"/></linearGradient></defs>
+<g fill="none" stroke-linecap="round" stroke-width="5">
+<path d="M 48.1 46.7 A 29 29 0 0 0 30.7 83.9" stroke="#CB3C33" opacity="0.45"/>
+<path d="M 44.0 35.5 A 41 41 0 0 0 19.5 88.0" stroke="#CB3C33" opacity="0.2"/>
+<path d="M 116.6 20.2 A 29 29 0 0 0 83.4 20.2" stroke="#389826" opacity="0.45"/>
+<path d="M 123.5 10.4 A 41 41 0 0 0 76.5 10.4" stroke="#389826" opacity="0.2"/>
+<path d="M 169.3 83.9 A 29 29 0 0 0 151.9 46.7" stroke="#9558B2" opacity="0.45"/>
+<path d="M 180.5 88.0 A 41 41 0 0 0 156.0 35.5" stroke="#9558B2" opacity="0.2"/>
+</g>
+<polyline points="20.0,150.0 22.0,151.3 24.0,152.5 26.0,153.8 28.0,155.0 30.0,156.1 32.0,157.2 34.0,158.2 36.0,159.2 38.0,160.0 40.0,160.8 42.0,161.5 44.0,162.0 46.0,162.4 48.0,162.8 50.0,162.9 52.0,163.0 54.0,162.9 56.0,162.8 58.0,162.4 60.0,162.0 62.0,161.5 64.0,160.8 66.0,160.0 68.0,159.2 70.0,158.2 72.0,157.2 74.0,156.1 76.0,155.0 78.0,153.8 80.0,152.5 82.0,151.3 84.0,150.0 86.0,148.7 88.0,147.5 90.0,146.2 92.0,145.0 94.0,143.9 96.0,142.8 98.0,141.8 100.0,140.8 102.0,140.0 104.0,139.2 106.0,138.5 108.0,138.0 110.0,137.6 112.0,137.2 114.0,137.1 116.0,137.0 118.0,137.1 120.0,137.2 122.0,137.6 124.0,138.0 126.0,138.5 128.0,139.2 130.0,140.0 132.0,140.8 134.0,141.8 136.0,142.8 138.0,143.9 140.0,145.0 142.0,146.2 144.0,147.5 146.0,148.7 148.0,150.0 150.0,151.3 152.0,152.5 154.0,153.8 156.0,155.0 158.0,156.1 160.0,157.2 162.0,158.2 164.0,159.2 166.0,160.0 168.0,160.8 170.0,161.5 172.0,162.0 174.0,162.4 176.0,162.8 178.0,162.9 180.0,163.0" fill="none" stroke="url(#seb)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="58" y1="89" x2="58" y2="141.4402243645187" stroke="#CB3C33" stroke-width="7" stroke-linecap="round"/>
+<path d="M 48 139.4 L 68 139.4 L 58 154.4 Z" fill="#CB3C33" stroke="#CB3C33" stroke-width="3" stroke-linejoin="round"/>
+<line x1="100" y1="59" x2="100" y2="119.8076118445749" stroke="#389826" stroke-width="7" stroke-linecap="round"/>
+<path d="M 90 117.8 L 110 117.8 L 100 132.8 Z" fill="#389826" stroke="#389826" stroke-width="3" stroke-linejoin="round"/>
+<line x1="142" y1="89" x2="142" y2="125.22629919569201" stroke="#9558B2" stroke-width="7" stroke-linecap="round"/>
+<path d="M 132 123.2 L 152 123.2 L 142 138.2 Z" fill="#9558B2" stroke="#9558B2" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="32" cy="157.2" r="4.2" fill="#fff" stroke="none"/>
+<circle cx="80" cy="152.5" r="4.2" fill="#fff" stroke="none"/>
+<circle cx="121" cy="137.4" r="4.2" fill="#fff" stroke="none"/>
+<circle cx="170" cy="161.5" r="4.2" fill="#fff" stroke="none"/>
+<circle cx="58" cy="74" r="17" fill="#CB3C33"/>
+<circle cx="100" cy="44" r="17" fill="#389826"/>
+<circle cx="142" cy="74" r="17" fill="#9558B2"/>
+</svg>

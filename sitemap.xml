@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/getting-started.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/reference/api.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/reference/release-notes.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/theory/algorithms.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/theory/bayesian.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/theory/inverse-problems.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/theory/references.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/theory/regularization.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/theory/uncertainty.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/tutorials/groups.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/tutorials/point-force.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/tutorials/space-frequency.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/tutorials/time-domain.html</loc></url>
+  <url><loc>https://maucejo.github.io/SourceEstimation.jl/tutorials/uncertainty.html</loc></url>
+</urlset>

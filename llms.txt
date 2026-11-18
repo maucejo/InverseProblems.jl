@@ -1,0 +1,21 @@
+# SourceEstimation.jl
+
+> Regularized resolution of linear inverse problems in Julia: force reconstruction and source identification in structural dynamics and acoustics.
+
+## Pages
+
+- [Getting started](https://maucejo.github.io/SourceEstimation.jl/getting-started.html): Install SourceEstimation.jl and solve your first inverse problem.
+- [SourceEstimation.jl](https://maucejo.github.io/SourceEstimation.jl/): Regularized resolution of linear inverse problems in Julia: force reconstruction and source identification.
+- [API reference](https://maucejo.github.io/SourceEstimation.jl/reference/api.html): Reference of the public API of SourceEstimation.jl, generated from the docstrings.
+- [Release notes](https://maucejo.github.io/SourceEstimation.jl/reference/release-notes.html): Changes between the versions of SourceEstimation.jl.
+- [Algorithms](https://maucejo.github.io/SourceEstimation.jl/theory/algorithms.html): Iteratively reweighted algorithm, resolution strategies and linear solvers of SourceEstimation.jl.
+- [Bayesian regularization](https://maucejo.github.io/SourceEstimation.jl/theory/bayesian.html): Hierarchical Bayesian model, optimal Bayesian regularization and relevance vector regression.
+- [Linear inverse problems](https://maucejo.github.io/SourceEstimation.jl/theory/inverse-problems.html): Forward models of source identification problems and why their inversion is ill-posed.
+- [Bibliography](https://maucejo.github.io/SourceEstimation.jl/theory/references.html): Bibliography of the methods implemented in SourceEstimation.jl.
+- [Regularization](https://maucejo.github.io/SourceEstimation.jl/theory/regularization.html): Regularization terms, additive and multiplicative formulations, and regularization parameter choice rules.
+- [Posterior uncertainty](https://maucejo.github.io/SourceEstimation.jl/theory/uncertainty.html): Gaussian approximation of the posterior, marginal covariances by block solves and sampling by perturbation-optimization.
+- [Group regularization](https://maucejo.github.io/SourceEstimation.jl/tutorials/groups.html): Region-wise priors and multi-parameter regularization for mixed localized and distributed sources.
+- [Localizing a point force](https://maucejo.github.io/SourceEstimation.jl/tutorials/point-force.html): Single-frequency force reconstruction on a beam: Tikhonov, sparse and Bayesian regularizations.
+- [Space–frequency problems](https://maucejo.github.io/SourceEstimation.jl/tutorials/space-frequency.html): Broadband source identification: frequency-by-frequency resolution versus mixed-norm space-frequency regularization.
+- [Time-domain reconstruction](https://maucejo.github.io/SourceEstimation.jl/tutorials/time-domain.html): Space-time force reconstruction from a block convolution matrix with mixed-norm regularization.
+- [Uncertainty quantification](https://maucejo.github.io/SourceEstimation.jl/tutorials/uncertainty.html): Posterior precision, standard deviations, samples and credible intervals of a reconstruction.
