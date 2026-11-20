@@ -1,12 +1,6 @@
 # Resolution strategy -------------------------------------------------------------------------
 #
-# A space–frequency problem regularized with Lq terms only is solved frequency by frequency
-# (the papers treat each frequency independently); with at least one mixed norm Lpq, the
-# frequencies are coupled through the weights and the problem is solved as a whole, block by
-# block. With an operator on the columns (Lpq with Lc, Lf in MSSP 2018), the samples are coupled
-# in the linear systems: the space–frequency or space–time problem is assembled (vectorized,
-# sparse block-diagonal H for space–frequency problems) and solved as a whole.
-# Single-frequency problems are always solved as a whole.
+# A space–frequency problem regularized with Lq terms only is solved frequency by frequency (the papers treat each frequency independently); with at least one mixed norm Lpq, the frequencies are coupled through the weights and the problem is solved as a whole, block by block. With an operator on the columns (Lpq with Lc, Lf in MSSP 2018), the samples are coupled in the linear systems: the space–frequency or space–time problem is assembled (vectorized, sparse block-diagonal H for space–frequency problems) and solved as a whole.Single-frequency problems are always solved as a whole.
 
 """Do the regularization terms couple the samples (frequencies)?"""
 abstract type SampleCoupling end
@@ -60,19 +54,14 @@ dense_strategy(::SampleCoupling) = Joint()
 dense_strategy(::SmoothedSamples) = Assembled()
 
 """
-    solve(prob, formulation[, algorithm]; R = nothing, precision = false, tol = 1e-4, maxiter = 100, init)
+    solve(prob, formulation[, algorithm]; R = nothing, precision = false, tol = 1e-8, maxiter = 100, init)
 
-Solve the inverse problem `prob` with the given regularization `formulation`. When the
-algorithm is omitted, [`default_algorithm`](@ref) is used.
+Solve the inverse problem `prob` with the given regularization `formulation`. When the algorithm is omitted, [`default_algorithm`](@ref) is used.
 
-For a space–frequency problem (block-diagonal operator), the resolution strategy depends on
-the regularization terms (dispatch on [`sample_coupling`](@ref)):
+For a space–frequency problem (block-diagonal operator), the resolution strategy depends on the regularization terms (dispatch on [`sample_coupling`](@ref)):
 
-* `Lq` terms only: frequency-by-frequency resolution — each frequency is an independent
-  problem with its own regularization parameter(s), hyperparameters and stopping criterion,
-  solved in parallel;
-* at least one `Lpq` term: the mixed norm couples the frequencies, the space–frequency
-  problem is solved as a whole.
+* `Lq` terms only: frequency-by-frequency resolution — each frequency is an independent problem with its own regularization parameter(s), hyperparameters and stopping criterion, solved in parallel;
+* at least one `Lpq` term: the mixed norm couples the frequencies, the space–frequency problem is solved as a whole.
 
 Single-frequency and space–time problems are always solved as a whole.
 
@@ -82,25 +71,13 @@ Single-frequency and space–time problems are always solved as a whole.
 - `algorithm` - `Algorithm`: resolution algorithm (`IR()` for `Additive` and
   `Multiplicative`, `MAP()` or `ElementWise()` for `Bayesian`)
 - `R` - `Nothing`, `UniformScaling`, `Diagonal`, `AbstractVector` or `AbstractMatrix`: known diagonal noise covariance — not provided (default, equivalent to `I`), `σ²I`, or the noise variances (vector, or matrix with the layout of `y`). The data fidelity is `‖y - Hu‖²_{R⁻¹}`
-- `precision` - `Bool`: also return the posterior precision `Q = τn (Hᴴ H + Lᴴ D L)` of the
-  Gaussian approximation at the solution (`sol.precision`: dense, sparse for an assembled
-  space–frequency problem, or one `nr × nr` block per frequency for independent or
-  block-diagonal frequencies) and the posterior model (`sol.posterior`) used by
-  [`posterior_std`](@ref), [`posterior_covariance`](@ref), [`posterior_samples`](@ref) and
-  [`credible_interval`](@ref). For the additive and multiplicative formulations, `τn = 1`
-  (`R` is then taken as the exact noise covariance)
+- `precision` - `Bool`: also return the posterior precision `Q = τn (Hᴴ H + Lᴴ D L)` of the Gaussian approximation at the solution (`sol.precision`: dense, sparse for an assembled space–frequency problem, or one `nu × nu` block per frequency for independent or block-diagonal frequencies) and the posterior model (`sol.posterior`) used by [`posterior_std`](@ref), [`posterior_covariance`](@ref), [`posterior_samples`](@ref) and [`credible_interval`](@ref). For the additive and multiplicative formulations, `τn = 1` (`R` is then taken as the exact noise covariance)
 - `tol` - `Real`: tolerance on the relative `ℓ1` variation of `u`
 - `maxiter` - `Integer`: maximum number of iterations
 - `init` - `Real` or `ParameterChoice`: initial Tikhonov solution — initial regularization parameter, or rule selecting it (`Heuristic()`, `LCurve()`, `GCV()`, `BayesEstimator()`)
 
 **Outputs**
-- `sol` - `InverseSolution`: solution, regularization parameter(s), hyperparameters,
-  convergence information and, if requested, posterior precision. For a
-  frequency-by-frequency resolution, the quantities of each frequency are stacked as columns
-  (`λ`: vector of length `nf`, or `G × nf` / `nr × nf` matrix; `hyper.τn`, `hyper.τs`,
-  `hyper.q` likewise), `hyper` also contains the `iterations`, `converged` and `history` of
-  each frequency, `iterations`/`converged`/`history` refer to the slowest frequency / all
-  frequencies, and `precision` is a vector of `nr × nr` matrices
+- `sol` - `InverseSolution`: solution, regularization parameter(s), hyperparameters, convergence information and, if requested, posterior precision. For a frequency-by-frequency resolution, the quantities of each frequency are stacked as columns (`λ`: vector of length `nf`, or `G × nf` / `nu × nf` matrix; `hyper.τn`, `hyper.τs`, `hyper.q` likewise), `hyper` also contains the `iterations`, `converged` and `history` of each frequency, `iterations`/`converged`/`history` refer to the slowest frequency / all frequencies, and `precision` is a vector of `nu × nu` matrices
 """
 solve(prob::InverseProblem, f::Formulation; kwargs...) =
     solve(prob, f, default_algorithm(f); kwargs...)
@@ -148,10 +125,7 @@ end
 
 # Assembled resolution (operator along the samples) -------------------------------------------
 #
-# The problem is vectorized: u = vec(U), y = vec(Y), H block-diagonal (sparse) for a
-# space–frequency problem or the space–time convolution matrix; each group g of rows r_g becomes
-# the group sample_rows(r_g, nr, ns) with the operator kron(Lc_g, L_g) and a mixed norm on the
-# (size(L_g, 1) × size(Lc_g, 1)) matrix L_g U_g Lc_gᵀ.
+# The problem is vectorized: u = vec(U), y = vec(Y), H block-diagonal (sparse) for a space–frequency problem or the space–time convolution matrix; each group g of rows r_g becomes the group sample_rows(r_g, nu, ns) with the operator kron(Lc_g, L_g) and a mixed norm on the (size(L_g, 1) × size(Lc_g, 1)) matrix L_g U_g Lc_gᵀ.
 
 assembled_operator(op::BlockDiagonalOperator) = blockdiag(sparse.(op.blocks)...)
 assembled_operator(op::DenseOperator) = op.H
@@ -169,9 +143,9 @@ vectorized(t::Lq, n, ns) = Lq(t.q; L = vectorized_operator(t.L, nothing, n, ns))
 vectorized(t::Lpq, n, ns) =
     Lpq(t.p, t.q; L = vectorized_operator(t.L, t.Lc, n, ns), samples = sample_count(t.Lc, ns))
 
-function vectorized(prior::RegularizationTerm, nr, ns)
-    G = groups(prior, nr)
-    return Groups([sample_rows(rows, nr, ns) for rows in G.rows],
+function vectorized(prior::RegularizationTerm, nu, ns)
+    G = groups(prior, nu)
+    return Groups([sample_rows(rows, nu, ns) for rows in G.rows],
                   Tuple(vectorized(t, length(rows), ns) for (rows, t) in zip(G.rows, G.terms)))
 end
 
@@ -180,13 +154,13 @@ with_prior(::Multiplicative{<:Any,C}, prior) where {C} = Multiplicative{typeof(p
 with_prior(f::Bayesian, prior) = Bayesian(prior, f.τn, f.τs, f.q, f.shape_bounds)
 
 function solve_strategy(::Assembled, prob, f, alg; R = nothing, precision = false, kwargs...)
-    nr, ns = unknown_size(prob)
+    nu, ns = unknown_size(prob)
     ns > 1 || throw(ArgumentError("an operator along the samples (Lc) requires several frequencies or time samples"))
     σ2 = noise_variances(R, prob.y)
     pv = InverseProblem(assembled_operator(prob.H), vec(prob.y))
-    sol = solve_joint(pv, with_prior(f, vectorized(f.prior, nr, ns)), alg;
+    sol = solve_joint(pv, with_prior(f, vectorized(f.prior, nu, ns)), alg;
                       R = σ2 === nothing ? nothing : vec(σ2),
-                      precision = posterior_request(precision, nr), kwargs...)
-    return InverseSolution(reshape(sol.u, nr, ns), sol.λ, sol.hyper, sol.iterations,
+                      precision = posterior_request(precision, nu), kwargs...)
+    return InverseSolution(reshape(sol.u, nu, ns), sol.λ, sol.hyper, sol.iterations,
                            sol.converged, sol.history, sol.precision, sol.posterior)
 end

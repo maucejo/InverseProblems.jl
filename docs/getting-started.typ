@@ -17,13 +17,14 @@ include(isfile("_lib/setup.jl") ? "_lib/setup.jl" : "../_lib/setup.jl")
 
 #title()
 
-`SourceEstimation.jl` solves regularized linear inverse problems of the form
-
+`SourceEstimation.jl` solves regularized linear inverse problems of the form:
 $
-  y = H u + n,
+  bold(y) = bold(H space.hair u) + bold(n),
 $
 
-where $y$ gathers the measurements, $H$ is the forward operator (transfer functions, convolution matrix or any linear model), $u$ is the unknown source field and $n$ is the measurement noise. It is primarily intended for *force reconstruction* and *source identification* in structural dynamics and acoustics, but it can be used for any linear inverse problem.
+where $bold(y)$ gathers the measurements, $bold(H)$ is the forward operator (transfer functions, convolution matrix or any linear model), $bold(u)$ is the unknown source field and $bold(n)$ is the measurement noise.
+
+This package is primarily designed for *force reconstruction* and *source identification* in structural dynamics and acoustics, but it can be used for any linear inverse problem, as the methods are general and the API is agnostic to the physical meaning of the variables.
 
 = Installation
 
@@ -54,8 +55,8 @@ The whole public API boils down to one verb, `solve`, and four families of types
   columns: (auto, auto, 1fr),
   align: left,
   table.header([*Role*], [*Types*], [*What it describes*]),
-  [Problem], [`InverseProblem`], [the forward operator $H$ and the data $y$],
-  [Regularization term], [`Lq`, `Lpq`, `Groups`], [the prior knowledge on the sources (sparse, distributed, smooth…)],
+  [Problem], [`InverseProblem`], [the forward operator $bold(H)$ and the data $bold(y)$],
+  [Regularization term], [`Lq`, `Lpq`, `Groups`], [the prior knowledge on the sources (sparse, distributed, smooth, #sym.dots)],
   [Formulation], [`Additive`, `Multiplicative`, `Bayesian`], [how data fidelity and regularization are combined],
   [Algorithm], [`IR`, `MAP`, `ElementWise`], [how the problem is solved (optional: a default is chosen)],
 )
@@ -88,7 +89,7 @@ Since the source field is sparse, an $ell_1$ prior is better suited. With the mu
 sol_l1 = solve(prob, Multiplicative(Lq(1.0)))
 ```
 
-Finally, the hierarchical Bayesian formulation estimates the noise level, the prior precision _and_ the shape of the prior from the data:
+Finally, the hierarchical Bayesian formulation estimates the noise level, the prior precision and the shape of the prior from the data:
 
 ```julia
 sol_bayes = solve(prob, Bayesian(Lq(1.0)))
@@ -106,15 +107,20 @@ axislegend(ax, position = :rb, nbanks = 2)
 fig
 ```
 
+#calepin.elements.callout(kind: "warning")[In the proposed example, the matrix $bold(H)$ is used to synthesize the data and to reconstruct the source field. This is called the *inverse crime* and is not recommended in practice. In real applications, the forward operator is usually a model of the physical system, which is never perfect.
+
+That said, the inverse crime is not a problem here, as the goal is to illustrate the API and the methods, not to benchmark them. This _bad_ practice is used in the other tutorials as well to keep them short.
+]
+
 = Anatomy of a solution
 
 `solve` returns an `InverseSolution` whose fields are:
 
-- `u` — the reconstructed field (vector, or `nr × ns` matrix for space–frequency and space–time problems);
-- `λ` — the final regularization parameter(s);
-- `hyper` — the other estimated quantities (noise precision `τn`, prior precision `τs` and shape `q` for the Bayesian formulation);
-- `iterations`, `converged`, `history` — convergence information of the iterative algorithms;
-- `precision`, `posterior` — the posterior precision and the posterior model, when `solve(...; precision = true)`.
+- `u` -- the reconstructed field (vector, or `nu × ns` matrix for space–frequency and space–time problems);
+- `λ` -- the final regularization parameter(s);
+- `hyper` -- the other estimated quantities (noise precision `τn`, prior precision `τs` and shape `q` for the Bayesian formulation);
+- `iterations`, `converged`, `history` -- convergence information of the iterative algorithms;
+- `precision`, `posterior` -- the posterior precision and the posterior model, when `solve(...; precision = true)`.
 
 ```julia
 sol_bayes.hyper
@@ -123,7 +129,7 @@ sol_bayes.hyper
 ```julia
 #| results: "typst"
 #| echo: false
-err(s) = @sprintf("%.1f %%", relerr(s.u, u_true))
+err(s) = @sprintf("%.1f %%", relative_error(u_true, s))
 typst_table(["Method", "Call", "Relative error", "Iterations"],
             [("Tikhonov", Code("Additive(Lq(2.0); λ = GCV())"), err(sol_tik), sol_tik.iterations),
              ("Multiplicative ℓ1", Code("Multiplicative(Lq(1.0))"), err(sol_l1), sol_l1.iterations),
@@ -142,15 +148,15 @@ Whatever the domain, the *rows* of the unknown are the reconstruction points and
   columns: (auto, auto, auto, 1fr),
   align: left,
   table.header([*`H`*], [*`y`*], [*unknown `u`*], [*use case*]),
-  [matrix `nm × nr`], [vector], [vector `nr`], [single frequency, generic problem],
-  [vector of `nm × nr` matrices, or `nm × nr × nf` array], [matrix `nm × nf`], [matrix `nr × nf`], [space–frequency],
-  [matrix `nm·nt × nr·nt`], [matrix `nm × nt`], [matrix `nr × nt`], [space–time (convolution)],
+  [matrix `nm × nu`], [vector `nm`], [vector `nu`], [single frequency, generic problem],
+  [vector of `nm × nu` matrices, or `nm × nu × nf` array], [matrix `nm × nf`], [matrix `nu × nf`], [space–frequency],
+  [matrix `nm·nt × nu·nt`], [matrix `nm × nt`], [matrix `nu × nt`], [space–time (convolution)],
   [sparse matrix], [vector or matrix], [as above], [assembled problem],
 )
 
 As a consequence, `Groups`, smoothing operators and mixed norms `Lpq` have the same meaning in the time and frequency domains.
 
-The data can be *real* (e.g. time-domain problems) or *complex* (frequency-domain problems). The field is deduced from the element types of `H` and `y`, and the few formulas that depend on it — the probability distributions of the Bayesian formulation — are selected automatically. The #link("theory/inverse-problems.html")[theory pages] use a notation valid in both cases.
+The data can be *real* (e.g. time-domain problems) or *complex* (frequency-domain problems). The field is deduced from the element types of `H` and `y`, and the few formulas that depend on it, such as the probability distributions of the Bayesian formulation, are selected automatically. The #link("theory/inverse-problems.html")[Theory pages] use a notation valid in both cases.
 
 = Next steps
 

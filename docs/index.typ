@@ -34,13 +34,13 @@ include(isfile("_lib/setup.jl") ? "_lib/setup.jl" : "../_lib/setup.jl")
 
 #features(
   card(icon: [📡], title: [Time & frequency domains], color: julia.blue)[
-    Single or multi-frequency problems with one FRF matrix per frequency, SISO/MIMO convolution problems in the time domain, or any linear operator `y = H u + n`.
+    Single or multi-frequency problems with one FRF matrix per frequency, SISO/MIMO convolution problems in the time domain, or any linear operator $bold(y) = bold(H space.hair u)$.
   ],
   card(icon: [🎯], title: [Priors for every source], color: julia.red)[
     `Lq` norms from sparse (`q ≤ 1`) to smooth (`q = 2`), space–frequency mixed norms `Lpq`, and region-wise `Groups` with their own smoothing operators.
   ],
   card(icon: [⚖️], title: [Three formulations], color: julia.green)[
-    Additive (generalized Tikhonov, multi-parameter), multiplicative (OMR, MPMR — nothing to tune) and hierarchical Bayesian regularization.
+    Additive (generalized Tikhonov, multi-parameter), multiplicative (OMR, MPMR -- nothing to tune) and hierarchical Bayesian regularization.
   ],
   card(icon: [🧭], title: [Automatic parameter choice], color: julia.purple)[
     L-curve, generalized cross-validation and Bayesian estimator on the (generalized) SVD of the weighted problem, plus heuristic initializations.
@@ -72,14 +72,20 @@ sol.u, sol.λ, sol.hyper                             # reconstructed field, para
 
 #split(
   [
-    - *Problems* — `InverseProblem` for single-frequency, space–frequency, space–time and assembled (sparse) problems, real or complex, with a known diagonal noise covariance.
-    - *Regularization terms* — `Lq`, `Lpq`, `Groups`, finite-difference operators `diff_operator`, `space_sample_operator`, `sample_rows`.
-    - *Formulations* — `Additive`, `Multiplicative`, `Bayesian` (with `Estimated()` or `Fixed()` hyperparameters).
+    - *Problems* -- `InverseProblem` for single-frequency, space–frequency, space–time and assembled (sparse) problems, real or complex, with a known diagonal noise covariance.
+
+    - *Regularization terms* -- `Lq`, `Lpq`, `Groups`, finite-difference operators `diff_operator`, `space_sample_operator`, `sample_rows`.
+
+    - *Formulations* -- `Additive`, `Multiplicative`, `Bayesian` (with `Estimated()` or `Fixed()` hyperparameters).
+
+    - *Parameter choice* -- `LCurve`, `GCV`, `BayesEstimator`, `Heuristic`, `LambdaMax`.
   ],
   [
-    - *Parameter choice* — `LCurve`, `GCV`, `BayesEstimator`, `Heuristic`, `LambdaMax`.
-    - *Algorithms* — `IR` (iteratively reweighted), `MAP` (optimal Bayesian regularization), `ElementWise` (relevance vector regression).
-    - *Uncertainty* — `posterior_std`, `posterior_covariance`, `posterior_samples`, `credible_interval`.
+    - *Algorithms* -- `IR` (iteratively reweighted), `MAP` (optimal Bayesian regularization), `ElementWise` (relevance vector regression).
+
+    - *Uncertainty* -- `posterior_std`, `posterior_covariance`, `posterior_samples`, `credible_interval`.
+
+    - *Performance indicators* -- `relative_error`, `correlation`, `precision_metric`, `accuracy_metric`, `performance_ratio`.
   ],
 )
 

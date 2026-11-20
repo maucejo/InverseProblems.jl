@@ -75,4 +75,8 @@ When a Cholesky factor of $A$ is already available (normal equations, CHOLMOD), 
 
 `credible_interval(sol; level = 0.95)` computes the empirical quantiles (1 - level)/2 and (1 + level)/2 of posterior samples, component by component (real and imaginary parts separately for complex data).
 
+= Performance indicators
+
+When a reference field is available, the posterior variances also enter the #link("performance.html")[precision and accuracy indicators] (`precision_metric`, `accuracy_metric`), which measure the spread of the posterior and its distance to the reference.
+
 #bibliography("/refs.bib", title: [References], style: "ieee")

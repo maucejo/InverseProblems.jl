@@ -26,19 +26,19 @@ Factorization of `A = Hᴴ H + D` (`D` diagonal) by the Woodbury identity, on th
 - `d` - `Vector{<:Real}`: diagonal of `D`
 - `F` - `Cholesky`: factorization of `I + H D⁻¹ Hᴴ` (size `nm`)
 - `S` - `SmoothingOperator`: smoothing operator (`IdentitySmoothing` or `InvertibleSmoothing`)
-- `nr` - `Int`: number of rows of the unknown
+- `nu` - `Int`: number of rows of the unknown
 """
 struct WoodburyFactor{T, R<:Real, F, S<:SmoothingOperator}
     KD::Matrix{T}
     d::Vector{R}
     F::F
     S::S
-    nr::Int
+    nu::Int
 end
 
-function WoodburyFactor(K::AbstractMatrix, d::AbstractVector{<:Real}, S::SmoothingOperator, nr)
+function WoodburyFactor(K::AbstractMatrix, d::AbstractVector{<:Real}, S::SmoothingOperator, nu)
     KD = K ./ transpose(d)
-    return WoodburyFactor(KD, collect(d), cholesky!(Hermitian(KD * K' + I)), S, nr)
+    return WoodburyFactor(KD, collect(d), cholesky!(Hermitian(KD * K' + I)), S, nu)
 end
 
 """
@@ -59,9 +59,9 @@ and on the smoothing operator, as for [`weighted_solve!`](@ref)).
 posterior_factor(c::Overdetermined, S::SmoothingOperator, D) =
     cholesky(Hermitian(c.HtH + weighted_gram(c, S, vec(D))))
 posterior_factor(c::Underdetermined, ::IdentitySmoothing, D) =
-    WoodburyFactor(c.H, vec(D), IdentitySmoothing(), c.nr)
+    WoodburyFactor(c.H, vec(D), IdentitySmoothing(), c.nu)
 posterior_factor(c::Underdetermined, S::InvertibleSmoothing, D) =
-    WoodburyFactor(standard_form(c, S), vec(D), S, c.nr)
+    WoodburyFactor(standard_form(c, S), vec(D), S, c.nu)
 posterior_factor(c::Underdetermined, S::SingularSmoothing, D) =
     cholesky(Hermitian(gram(c) + weighted_gram(c, S, vec(D))))
 posterior_factor(c::SparseCache, S::SmoothingOperator, D) =
@@ -83,15 +83,15 @@ posterior_factor(c::BlockCache, S::SmoothingOperator, D) =
 """
 inverse_apply(F::Factorization, B) = F \ B
 function inverse_apply(W::WoodburyFactor, B)
-    Bs = to_standard_form(W.S, B, W.nr)                       # L⁻ᴴ B
+    Bs = to_standard_form(W.S, B, W.nu)                       # L⁻ᴴ B
     X = Bs ./ W.d .- W.KD' * (W.F \ (W.KD * Bs))              # (H̃ᴴH̃ + D)⁻¹ L⁻ᴴ B
-    return from_standard_form(W.S, X, W.nr)                   # L⁻¹ (…)
+    return from_standard_form(W.S, X, W.nu)                   # L⁻¹ (…)
 end
 
-to_standard_form(::IdentitySmoothing, B, nr) = B
-to_standard_form(S::InvertibleSmoothing, B, nr) = smoothing_ldiv_adjoint(S, Matrix(B), nr)
-from_standard_form(::IdentitySmoothing, X, nr) = X
-from_standard_form(S::InvertibleSmoothing, X, nr) = smoothing_ldiv(S, X, nr)
+to_standard_form(::IdentitySmoothing, B, nu) = B
+to_standard_form(S::InvertibleSmoothing, B, nu) = smoothing_ldiv_adjoint(S, Matrix(B), nu)
+from_standard_form(::IdentitySmoothing, X, nu) = X
+from_standard_form(S::InvertibleSmoothing, X, nu) = smoothing_ldiv(S, X, nu)
 
 """
     precision_matrix(cache, L, D, τn)
@@ -106,7 +106,7 @@ Posterior precision `Q = τn (Hᴴ H + Lᴴ D L)`.
 
 **Outputs**
 - `Q` - `Hermitian` (dense operator), `SparseMatrixCSC` (sparse operator) or vector of
-  `Hermitian` (one `nr × nr` block per sample of a block-diagonal operator)
+  `Hermitian` (one `nu × nu` block per sample of a block-diagonal operator)
 """
 precision_matrix(c::DenseCache, S::SmoothingOperator, D, τn) =
     Hermitian(τn .* (gram(c) + weighted_gram(c, S, vec(D))))
@@ -155,7 +155,7 @@ posterior_request(x::Bool, nb = nothing) = x ? PosteriorRequest(nb) : nothing
 posterior_request(r::PosteriorRequest, nb = nothing) = r
 posterior_request(::Nothing, nb = nothing) = nothing
 
-block_size(r::PosteriorRequest{Nothing}, c) = c.nr
+block_size(r::PosteriorRequest{Nothing}, c) = c.nu
 block_size(r::PosteriorRequest{Int}, c) = r.nb
 
 """
@@ -245,7 +245,7 @@ end
 marginal_covariances(P::Posterior{<:Union{DenseCache,SparseCache}}) =
     marginal_blocks(P.F, size(P.c.H, 2), P.nb, P.τn, eltype(P.c))
 marginal_covariances(P::Posterior{<:BlockCache}) =
-    [only(marginal_blocks(P.F[j], P.c.nr, P.c.nr, P.τn, eltype(P.c))) for j in 1:P.c.ns]
+    [only(marginal_blocks(P.F[j], P.c.nu, P.c.nu, P.τn, eltype(P.c))) for j in 1:P.c.ns]
 marginal_covariances(P::SamplewisePosterior) = reduce(vcat, map(marginal_covariances, P.posteriors))
 
 # Full covariance of vec(u)

@@ -10,7 +10,7 @@ noise_spec(::Nothing, R) = 1.0
 noise_spec(τn, R) = τn
 
 initial_noise_precision(::Estimated, sys, λ0, W, N) =
-    N / marginal_quadratic(sys.c, weighted_solve!(Matrix{eltype(sys.c)}(undef, sys.c.nr, sys.c.ns), sys, λ0 .* W))
+    N / marginal_quadratic(sys.c, weighted_solve!(Matrix{eltype(sys.c)}(undef, sys.c.nu, sys.c.ns), sys, λ0 .* W))
 initial_noise_precision(τ::Real, sys, λ0, W, N) = float(τ)
 
 initial_signal_precision(::Estimated, τ0, G) = collect(float.(τ0))
@@ -31,7 +31,7 @@ update_noise_precision(::Estimated, F, N, r2) = noise_precision(F, N, r2)
 update_noise_precision(τ::Real, F, N, r2) = float(τ)
 
 """
-    solve_joint(prob, f::Bayesian, MAP(); R = nothing, precision = false, tol = 1e-4, maxiter = 100, inner_tol = 1e-4, inner_maxiter = 100, init = nothing)
+    solve_joint(prob, f::Bayesian, MAP(); R = nothing, precision = false, tol = 1e-8, maxiter = 100, inner_tol = 1e-8, inner_maxiter = 100, init = nothing)
 
 Optimal Bayesian regularization: MAP of the hierarchical model, alternating the updates of `q_g`, `τs_g`, `τn` (those marked `Estimated()`) and of `u` (IR algorithm).
 
@@ -44,28 +44,19 @@ Optimal Bayesian regularization: MAP of the hierarchical model, alternating the 
 - `maxiter` - `Integer`: maximum number of outer iterations
 - `inner_tol` - `Real`: tolerance of the IR algorithm (u-step)
 - `inner_maxiter` - `Integer`: maximum number of IR iterations
-- `init` - `Nothing`, `Real` or `ParameterChoice`: rule for the initial single-parameter
-  solution — by default `LCurve()` (heuristic value for a sparse operator)
+- `init` - `Nothing`, `Real` or `ParameterChoice`: rule for the initial single-parameter solution — by default `LCurve()` (heuristic value for a sparse operator)
 
 **Outputs**
-- `sol` - `InverseSolution`: MAP estimate, regularization parameters `λ_g = τs_g/τn` of the
-  MAP in `u` — `½‖y - Hu‖²_R + Σ_g (λ_g/q_g)‖L_g u_g‖_q^q` for real data,
-  `‖y - Hu‖²_R + Σ_g λ_g ‖L_g u_g‖_q^q` for complex data —, hyperparameters `(τn, τs, q)` in
-  `sol.hyper`, convergence information and, if requested, posterior precision
+- `sol` - `InverseSolution`: MAP estimate, regularization parameters `λ_g = τs_g/τn` of the MAP in `u` — `½‖y - Hu‖²_R + Σ_g (λ_g/q_g)‖L_g u_g‖_q^q` for real data,`‖y - Hu‖²_R + Σ_g λ_g ‖L_g u_g‖_q^q` for complex data —, hyperparameters `(τn, τs, q)` in `sol.hyper`, convergence information and, if requested, posterior precision
 """
-function solve_joint(prob::InverseProblem, f::Bayesian, ::MAP; R = nothing, precision = false,
-               tol = 1e-4, maxiter = 100, inner_tol = 1e-8, inner_maxiter = 100,
-               init = nothing)
+function solve_joint(prob::InverseProblem, f::Bayesian, ::MAP; R = nothing, precision = false, tol = 1e-8, maxiter = 100, inner_tol = 1e-8, inner_maxiter = 100, init = nothing)
     c, reg = setup(prob, f.prior, R)
-    return map_solve(prob, f, c, reg, noise_spec(f.τn, R), posterior_request(precision), tol, maxiter,
-                     inner_tol, inner_maxiter, map_init(init, c, reg))
+    return map_solve(prob, f, c, reg, noise_spec(f.τn, R), posterior_request(precision), tol, maxiter, inner_tol, inner_maxiter, map_init(init, c, reg))
 end
 
-# Initial single-parameter solution: L-curve by default, heuristic value for sparse operators
-# (no SVD available)
+# Initial single-parameter solution: L-curve by default, heuristic value for sparse operators (no SVD available)
 map_init(::Nothing, c, reg) = LCurve()
-map_init(::Nothing, c::SparseCache, reg) =
-    select_parameter(Heuristic(), c, reg.L, ones(real(eltype(c)), reg.nout, c.ns))
+map_init(::Nothing, c::SparseCache, reg) = select_parameter(Heuristic(), c, reg.L, ones(real(eltype(c)), reg.nout, c.ns))
 map_init(init, c, reg) = init
 
 # Function barrier (see `ir_solve`)
@@ -80,7 +71,7 @@ function map_solve(prob, f, c, reg, τnspec, request, tol, maxiter, inner_tol, i
     ε = dampings(reg, apply(reg.L, U0))
     st = reweighting(sys, reg, Additive(f.prior, init), U0, ε; tol = inner_tol, maxiter = inner_maxiter)
     U, λ0, D = st.U, st.λ, st.D
-    τn0 = initial_noise_precision(τnspec, sys, λ0, st.W, N)   # not reassigned: no boxing in the closure below
+    τn0 = initial_noise_precision(τnspec, sys, λ0, st.W, N) # not reassigned: no boxing in the closure below
     τs = initial_signal_precision(f.τs, [λ0 * cn * τn0 / prior_factor(F, qg) for qg in q], ngroups(reg))
     τn = τn0
     λu = u_step_parameters(F, τs, τn, q)

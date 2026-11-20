@@ -147,23 +147,23 @@ ngroups(G::Groups) = length(G.terms)
 has_sample_operator(G::Groups) = any(has_sample_operator, G.terms)
 
 """
-    groups(term, nr)
+    groups(term, nu)
 
-Normalize any regularization term into a validated [`Groups`](@ref) over `nr` rows, so that the solvers only have to deal with one representation.
+Normalize any regularization term into a validated [`Groups`](@ref) over `nu` rows, so that the solvers only have to deal with one representation.
 
 **Inputs**
 - `term` - `RegularizationTerm`: `Lq`, `Lpq` or `Groups`
-- `nr` - `Integer`: number of rows of the unknown
+- `nu` - `Integer`: number of rows of the unknown
 
 **Outputs**
-- `G` - `Groups`: groups forming a partition of `1:nr`, with consistent smoothing operators
+- `G` - `Groups`: groups forming a partition of `1:nu`, with consistent smoothing operators
 """
-groups(t::NormTerm, nr::Integer) = groups(Groups([collect(1:nr)], (t,)), nr)
+groups(t::NormTerm, nu::Integer) = groups(Groups([collect(1:nu)], (t,)), nu)
 
-function groups(G::Groups, nr::Integer)
-    seen = falses(nr)
+function groups(G::Groups, nu::Integer)
+    seen = falses(nu)
     for rows in G.rows, i in rows
-        1 <= i <= nr || throw(ArgumentError("row index $i out of range 1:$nr"))
+        1 <= i <= nu || throw(ArgumentError("row index $i out of range 1:$nu"))
         seen[i] && throw(ArgumentError("row $i belongs to several groups"))
         seen[i] = true
     end
@@ -176,9 +176,7 @@ function groups(G::Groups, nr::Integer)
     return G
 end
 
-# Same terms, other norm parameters (used by the Bayesian solver). The recursion on the
-# tuple keeps the types of the terms inferable.
+# Same terms, other norm parameters (used by the Bayesian solver). The recursion on the tuple keeps the types of the terms inferable.
 with_shape(t::Lq, q) = Lq(q; L = t.L)
 with_shapes(::Tuple{}, q, i = 1) = ()
-with_shapes(terms::Tuple, q, i = 1) =
-    (with_shape(first(terms), q[i]), with_shapes(Base.tail(terms), q, i + 1)...)
+with_shapes(terms::Tuple, q, i = 1) = (with_shape(first(terms), q[i]), with_shapes(Base.tail(terms), q, i + 1)...)

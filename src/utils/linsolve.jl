@@ -7,10 +7,10 @@
 # and, for the posterior covariance, to the inverse of the same matrix. The structure of H (dense / block-diagonal), the regime of the problem and the smoothing operator L are exploited through dispatch:
 #
 #   regime                    L                   system factorized
-#   nm ≥ nr (over/square)     any                 normal equations           nr × nr
-#   nm < nr (under)           I                   Woodbury identity          nm × nm
-#   nm < nr (under)           square invertible   Woodbury on H̃ = H L⁻¹     nm × nm
-#   nm < nr (under)           rectangular         normal equations           nr × nr
+#   nm ≥ nu (over/square)     any                 normal equations           nu × nu
+#   nm < nu (under)           I                   Woodbury identity          nm × nm
+#   nm < nu (under)           square invertible   Woodbury on H̃ = H L⁻¹     nm × nm
+#   nm < nu (under)           rectangular         normal equations           nu × nu
 #                                                 (Lᴴ D L singular: no Woodbury)
 #
 # Woodbury identity (D invertible):
@@ -18,24 +18,24 @@
 #     (Hᴴ H + D)⁻¹ Hᴴ y = D⁻¹ Hᴴ (I + H D⁻¹ Hᴴ)⁻¹ y
 # and, for L square invertible, (Hᴴ H + Lᴴ D L)⁻¹ = L⁻¹ (H̃ᴴ H̃ + D)⁻¹ L⁻ᴴ.
 """
-Cache of the quantities reused across iterations for a dense operator. The type of `HtH` (`Hᴴ H`) encodes the regime: a matrix when `nm ≥ nr` (over-determined or square problem), `nothing` when `nm < nr` (under-determined problem, `Hᴴ H` is not needed).
+Cache of the quantities reused across iterations for a dense operator. The type of `HtH` (`Hᴴ H`) encodes the regime: a matrix when `nm ≥ nu` (over-determined or square problem), `nothing` when `nm < nu` (under-determined problem, `Hᴴ H` is not needed).
 """
 struct DenseCache{T, M<:AbstractMatrix{T}, G<:Union{Matrix{T},Nothing}}
     H::M
     y::Vector{T}
     HtH::G
     Hty::Vector{T}
-    nr::Int
+    nu::Int
     ns::Int
 end
 
 """
-Over-determined or square problem (`nm ≥ nr`).
+Over-determined or square problem (`nm ≥ nu`).
 """
 const Overdetermined = DenseCache{<:Any, <:Any, <:Matrix}
 
 """
-Under-determined problem (`nm < nr`).
+Under-determined problem (`nm < nu`).
 """
 const Underdetermined = DenseCache{<:Any, <:Any, Nothing}
 
@@ -44,17 +44,17 @@ Cache for a block-diagonal operator (one dense cache per sample).
 """
 struct BlockCache{C<:DenseCache}
     blocks::Vector{C}
-    nr::Int
+    nu::Int
     ns::Int
 end
 
-function dense_cache(H::AbstractMatrix, y::AbstractVecOrMat, nr, ns, σ2 = nothing)
+function dense_cache(H::AbstractMatrix, y::AbstractVecOrMat, nu, ns, σ2 = nothing)
     T = promote_type(eltype(H), eltype(y), Float64)
     Hc = Matrix{T}(H)
     yc = Vector{T}(vec(y))
     whiten!(Hc, yc, σ2)
     HtH = size(Hc, 1) >= size(Hc, 2) ? Hc' * Hc : nothing
-    return DenseCache(Hc, yc, HtH, Hc' * yc, nr, ns)
+    return DenseCache(Hc, yc, HtH, Hc' * yc, nu, ns)
 end
 
 """
@@ -70,14 +70,14 @@ Cache of the quantities reused across iterations (`H`, `y`, `Hᴴ H`, `Hᴴ y`),
 - `c` - `DenseCache` (dense operator) or `BlockCache` (block-diagonal operator)
 """
 linear_cache(prob::InverseProblem{<:DenseOperator}, R = nothing) =
-    dense_cache(prob.H.H, prob.y, prob.H.nr, prob.H.ns, noise_variances(R, prob.y))
+    dense_cache(prob.H.H, prob.y, prob.H.nu, prob.H.ns, noise_variances(R, prob.y))
 
 function linear_cache(prob::InverseProblem{<:BlockDiagonalOperator}, R = nothing)
-    nr, ns = unknown_size(prob)
+    nu, ns = unknown_size(prob)
     σ2 = noise_variances(R, prob.y)
     column(j) = σ2 === nothing ? nothing : view(σ2, :, j)
-    block(j) = dense_cache(prob.H.blocks[j], view(prob.y, :, j), nr, 1, column(j))
-    return BlockCache(block_caches(block, block(1), ns), nr, ns)
+    block(j) = dense_cache(prob.H.blocks[j], view(prob.y, :, j), nu, 1, column(j))
+    return BlockCache(block_caches(block, block(1), ns), nu, ns)
 end
 
 # All the blocks have the same size, hence the same regime and type: the vector is typed from
@@ -114,7 +114,7 @@ end
 
 
 # H̃ = H L⁻¹ (standard form for a square invertible L)
-standard_form(c::DenseCache, S::InvertibleSmoothing) = Matrix(smoothing_ldiv_adjoint(S, Matrix(c.H'), c.nr)')
+standard_form(c::DenseCache, S::InvertibleSmoothing) = Matrix(smoothing_ldiv_adjoint(S, Matrix(c.H'), c.nu)')
 
 # Linear systems with preallocated workspace ---------------------------------------------------
 #
@@ -212,8 +212,8 @@ function add_weighted_gram!(A, Lt::SparseMatrixCSC, d)
 end
 
 # u = L⁻¹ v after a Woodbury solve on the standard form
-from_standard_form!(x, ::SmoothingOperator, nr) = x
-from_standard_form!(x, S::InvertibleSmoothing, nr) = (ldiv!(S.F, reshape(x, nr, :)); x)
+from_standard_form!(x, ::SmoothingOperator, nu) = x
+from_standard_form!(x, S::InvertibleSmoothing, nu) = (ldiv!(S.F, reshape(x, nu, :)); x)
 
 # vec(U) of the solution, in sys.x
 function solve_system!(sys::NormalSystem, d)
@@ -234,7 +234,7 @@ function solve_system!(sys::WoodburySystem, d)
     copyto!(sys.b, sys.c.y)
     ldiv!(cholesky!(Hermitian(A)), sys.b)                     # (I + K D⁻¹ Kᴴ)⁻¹ y
     mul!(sys.x, KD', sys.b)                                    # D⁻¹ Kᴴ (…)⁻¹ y
-    return from_standard_form!(sys.x, sys.S, sys.c.nr)
+    return from_standard_form!(sys.x, sys.S, sys.c.nu)
 end
 
 """
@@ -243,7 +243,7 @@ end
 In-place solution of the weighted Tikhonov system `(Hᴴ H + Lᴴ diag(vec(D)) L) vec(U) = Hᴴ y`, using the workspace of `sys`. The normal equations or the Woodbury identity are used depending on the regime of the problem and on the smoothing operator (see the table at the top of `linsolve.jl`).
 
 **Inputs**
-- `U` - `AbstractMatrix`: output (`nr × ns`), overwritten
+- `U` - `AbstractMatrix`: output (`nu × ns`), overwritten
 - `sys` - `DenseSystem` or `BlockSystem`: linear system (see [`linear_system`](@ref))
 - `D` - `AbstractMatrix{<:Real}`: positive diagonal weights, with the size of `L U`
 
@@ -273,10 +273,10 @@ Allocating version of [`weighted_solve!`](@ref), for one-off solves.
 - `D` - `AbstractMatrix{<:Real}`: positive diagonal weights, with the size of `L U`
 
 **Outputs**
-- `U` - `Matrix`: solution (`nr × ns`)
+- `U` - `Matrix`: solution (`nu × ns`)
 """
 weighted_solve(c, S::SmoothingOperator, D::AbstractMatrix{<:Real}) =
-    weighted_solve!(Matrix{eltype(c)}(undef, c.nr, c.ns), linear_system(c, S), D)
+    weighted_solve!(Matrix{eltype(c)}(undef, c.nu, c.ns), linear_system(c, S), D)
 
 """
     residual_norm2!(sys, U)
@@ -285,7 +285,7 @@ Squared (whitened) data misfit, computed in the workspace of `sys`.
 
 **Inputs**
 - `sys` - `DenseSystem` or `BlockSystem`: linear system
-- `U` - `AbstractMatrix`: unknown (`nr × ns`)
+- `U` - `AbstractMatrix`: unknown (`nu × ns`)
 
 **Outputs**
 - `r2` - `Real`: `‖y - H vec(U)‖₂²`
@@ -306,7 +306,7 @@ Allocating version of [`residual_norm2!`](@ref).
 
 **Inputs**
 - `cache` - `DenseCache` or `BlockCache`: linear cache of the whitened problem
-- `U` - `AbstractMatrix`: unknown (`nr × ns`)
+- `U` - `AbstractMatrix`: unknown (`nu × ns`)
 
 **Outputs**
 - `r2` - `Real`: `‖y - H vec(U)‖₂²`

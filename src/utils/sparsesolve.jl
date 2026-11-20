@@ -1,7 +1,7 @@
 # Sparse operators -------------------------------------------------------------------------
 #
 # Assembled problems with a sparse forward operator, e.g. a vectorized space–frequency
-# problem (block-diagonal H of size (ny·nf) × (nu·nf)) whose frequencies are coupled by the
+# problem (block-diagonal H of size (nm·nf) × (nu·nf)) whose frequencies are coupled by the
 # regularization. The weighted Tikhonov systems (Hᴴ H + Lᴴ D L) u = Hᴴ y stay sparse and are
 # solved with sparse Cholesky factorizations (CHOLMOD); the symbolic analysis is computed at
 # the first solve and reused at the following iterations (same sparsity pattern).
@@ -18,14 +18,14 @@ Cache of the quantities reused across iterations for a sparse operator.
 - `y` - `Vector`: whitened data
 - `HtH` - `SparseMatrixCSC`: `Hᴴ H`
 - `Hty` - `Vector`: `Hᴴ y`
-- `nr`, `ns` - `Int`: size of the unknown (`nr × ns`)
+- `nu`, `ns` - `Int`: size of the unknown (`nu × ns`)
 """
 struct SparseCache{T, M<:SparseMatrixCSC{T}}
     H::M
     y::Vector{T}
     HtH::SparseMatrixCSC{T,Int}
     Hty::Vector{T}
-    nr::Int
+    nu::Int
     ns::Int
 end
 
@@ -35,14 +35,14 @@ function sparse_whiten(H, y, σ2)
     return Diagonal(s) * H, y .* s
 end
 
-function sparse_cache(H::AbstractSparseMatrix, y::AbstractVecOrMat, nr, ns, σ2 = nothing)
+function sparse_cache(H::AbstractSparseMatrix, y::AbstractVecOrMat, nu, ns, σ2 = nothing)
     T = promote_type(eltype(H), eltype(y), Float64)
     Hc, yc = sparse_whiten(SparseMatrixCSC{T,Int}(H), Vector{T}(vec(y)), σ2)
-    return SparseCache(Hc, yc, sparse(Hc' * Hc), Hc' * yc, nr, ns)
+    return SparseCache(Hc, yc, sparse(Hc' * Hc), Hc' * yc, nu, ns)
 end
 
 linear_cache(prob::InverseProblem{<:SparseOperator}, R = nothing) =
-    sparse_cache(prob.H.H, prob.y, prob.H.nr, prob.H.ns, noise_variances(R, prob.y))
+    sparse_cache(prob.H.H, prob.y, prob.H.nu, prob.H.ns, noise_variances(R, prob.y))
 
 Base.eltype(::SparseCache{T}) where {T} = T
 ndata(c::SparseCache) = length(c.y)
@@ -204,7 +204,7 @@ end
 function heuristic_operators(c::SparseCache, S::InvertibleSmoothing)
     Lg = global_operator(c, S)
     F = lu(c.HtH; check = false)
-    apply_A(x) = smoothing_ldiv_adjoint(S, c.HtH * smoothing_ldiv(S, x, c.nr), c.nr)
+    apply_A(x) = smoothing_ldiv_adjoint(S, c.HtH * smoothing_ldiv(S, x, c.nu), c.nu)
     Ainv = issuccess(F) ? (x -> Lg * (F \ (Lg' * x))) : nothing
     return apply_A, Ainv, ones(real(eltype(c)), size(c.HtH, 1))
 end

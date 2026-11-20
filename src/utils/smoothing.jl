@@ -11,7 +11,7 @@ abstract type SmoothingOperator end
 struct IdentitySmoothing <: SmoothingOperator end
 
 """
-General smoothing operator (sparse, `nout × nr`), with its LU factorization when it is
+General smoothing operator (sparse, `nout × nu`), with its LU factorization when it is
 square and invertible (`F = nothing` otherwise).
 """
 struct MatrixSmoothing{M<:AbstractMatrix, F} <: SmoothingOperator
@@ -33,9 +33,9 @@ function invertible_factorization(L::AbstractMatrix)
     return issuccess(F) ? F : nothing
 end
 
-# L⁻¹ X and L⁻ᴴ X, where X acts on vec(U) (U: nr × ns) and L acts on the rows of U
-smoothing_ldiv(S::InvertibleSmoothing, X, nr) = reshape(S.F \ reshape(X, nr, :), size(X))
-smoothing_ldiv_adjoint(S::InvertibleSmoothing, X, nr) = reshape(S.F' \ reshape(X, nr, :), size(X))
+# L⁻¹ X and L⁻ᴴ X, where X acts on vec(U) (U: nu × ns) and L acts on the rows of U
+smoothing_ldiv(S::InvertibleSmoothing, X, nu) = reshape(S.F \ reshape(X, nu, :), size(X))
+smoothing_ldiv_adjoint(S::InvertibleSmoothing, X, nu) = reshape(S.F' \ reshape(X, nu, :), size(X))
 
 apply(::IdentitySmoothing, U) = U
 apply(S::MatrixSmoothing, U) = S.L * U
@@ -68,9 +68,9 @@ is_identity(::Any) = false
 all_identity(::Tuple{}) = true
 all_identity(terms::Tuple) = is_identity(first(terms).L) && all_identity(Base.tail(terms))
 
-function Regularization(G::Groups, nr::Integer)
+function Regularization(G::Groups, nu::Integer)
     all_identity(G.terms) &&
-        return Regularization(IdentitySmoothing(), G.rows, G.terms, nr)
+        return Regularization(IdentitySmoothing(), G.rows, G.terms, nu)
 
     T = mapreduce(t -> eltype(t.L isa UniformScaling ? t.L.λ : t.L), promote_type, G.terms;
                   init = Float64)
@@ -87,5 +87,5 @@ function Regularization(G::Groups, nr::Integer)
         push!(out, collect(offset .+ (1:size(Lg, 1))))
         offset += size(Lg, 1)
     end
-    return Regularization(MatrixSmoothing(sparse(Is, Js, Vs, offset, nr)), out, G.terms, offset)
+    return Regularization(MatrixSmoothing(sparse(Is, Js, Vs, offset, nu)), out, G.terms, offset)
 end

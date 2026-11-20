@@ -9,10 +9,7 @@
 """
     fd_weights(h, npts, order)
 
-Finite-difference weights on a uniform grid (port of `ufdwt`, G. von Winckel). Each row
-contains the weights of one stencil of `npts` consecutive points: row `r` approximates the
-derivative at the `r`-th point of the stencil (row 1: forward scheme, last row: backward
-scheme, middle row: centered scheme when `npts` is odd).
+Finite-difference weights on a uniform grid (port of `ufdwt`, G. von Winckel). Each row contains the weights of one stencil of `npts` consecutive points: row `r` approximates the derivative at the `r`-th point of the stencil (row 1: forward scheme, last row: backward scheme, middle row: centered scheme when `npts` is odd).
 
 **Inputs**
 - `h` - `Real`: grid spacing
@@ -36,18 +33,15 @@ function fd_weights(h::Real, npts::Integer, order::Integer)
     return W
 end
 
-default_npts(order) = isodd(order + 1) ? order + 1 : order + 2      # smallest odd number of points
+default_npts(order) = isodd(order + 1) ? order + 1 : order + 2 # smallest odd number of points
 
 """
     diff_operator(n, order; npts = default, h = 1.0)
 
 Finite-difference operator of a 1D uniform grid of `n` points (port of `Dx_1D`).
 
-* minimal scheme (`npts = order + 1`): `(n - order) × n` matrix, one stencil of `npts`
-  consecutive points per row, without boundary rows (forward differences for `order = 1`,
-  second differences of the interior points for `order = 2`);
-* centered scheme (`npts` odd, `npts > order + 1`): `n × n` matrix, the first and last
-  points use off-centered stencils of the same size.
+* minimal scheme (`npts = order + 1`): `(n - order) × n` matrix, one stencil of `npts` consecutive points per row, without boundary rows (forward differences for `order = 1`, second differences of the interior points for `order = 2`);
+* centered scheme (`npts` odd, `npts > order + 1`): `n × n` matrix, the first and last points use off-centered stencils of the same size.
 
 **Inputs**
 - `n` - `Integer`: number of points
@@ -63,8 +57,7 @@ Finite-difference operator of a 1D uniform grid of `n` points (port of `Dx_1D`).
 function diff_operator(n::Integer, order::Integer; npts::Integer = default_npts(order), h::Real = 1.0)
     order == 0 && return sparse(1.0I, n, n)
     npts > order || throw(ArgumentError("npts must be greater than the order of the derivative"))
-    npts - order == 1 || isodd(npts) ||
-        throw(ArgumentError("npts must be odd for a centered scheme (npts > order + 1)"))
+    npts - order == 1 || isodd(npts) || throw(ArgumentError("npts must be odd for a centered scheme (npts > order + 1)"))
     n >= npts || throw(ArgumentError("$n points are not enough for a $npts-point scheme"))
     W = fd_weights(h, npts, order)
     Is, Js, Vs = Int[], Int[], Float64[]
@@ -138,9 +131,9 @@ end
 
 # Space–frequency / space–time operators (vectorized problems) --------------------------------
 #
-# For a vectorized problem, the unknown is u = vec(U), U being the nr × ns matrix of the field
+# For a vectorized problem, the unknown is u = vec(U), U being the nu × ns matrix of the field
 # (rows: reconstruction points, columns: frequencies or time samples), so that
-# u[i + (j - 1) nr] = U[i, j]. With this ordering,
+# u[i + (j - 1) nu] = U[i, j]. With this ordering,
 #     kron(Lc, L) * vec(U) = vec(L * U * transpose(Lc)).
 
 to_operator(L::UniformScaling, n) = sparse(L, n, n)
@@ -148,10 +141,10 @@ to_operator(L::AbstractMatrix, n) =
     size(L, 2) == n ? sparse(L) : throw(DimensionMismatch("operator with $(size(L, 2)) columns for a dimension $n"))
 
 """
-    space_sample_operator(nr, ns; L = I, Lc = I)
+    space_sample_operator(nu, ns; L = I, Lc = I)
 
 Operator of a vectorized space–frequency or space–time problem, acting on `u = vec(U)`
-(`U`: `nr × ns`, rows = reconstruction points, columns = frequencies or time samples):
+(`U`: `nu × ns`, rows = reconstruction points, columns = frequencies or time samples):
 
     L = kron(Lc, L),    L * vec(U) = vec(L * U * transpose(Lc))
 
@@ -159,34 +152,34 @@ Operator of a vectorized space–frequency or space–time problem, acting on `u
   (e.g. `Lf = diff_operator(ns, 1; h = Δf)`);
 * `Lc = I`, `L = Lx`: spatial smoothing at each frequency / time sample;
 * both: product of the two operators (mixed derivative, MSSP 2018 Eq. (15)). For a sum of
-  penalties, stack the operators: `[space_sample_operator(nr, ns; Lc = Lf); space_sample_operator(nr, ns; L = Lx)]`.
+  penalties, stack the operators: `[space_sample_operator(nu, ns; Lc = Lf); space_sample_operator(nu, ns; L = Lx)]`.
 
 **Inputs**
-- `nr` - `Integer`: number of reconstruction points (rows of `U`)
+- `nu` - `Integer`: number of reconstruction points (rows of `U`)
 - `ns` - `Integer`: number of frequencies or time samples (columns of `U`)
-- `L` - `AbstractMatrix` or `UniformScaling`: operator acting on the rows (`nr` columns)
+- `L` - `AbstractMatrix` or `UniformScaling`: operator acting on the rows (`nu` columns)
 - `Lc` - `AbstractMatrix` or `UniformScaling`: operator acting on the columns (`ns` columns)
 
 **Outputs**
-- `L` - `SparseMatrixCSC`: operator of size `(size(Lc, 1)·size(L, 1)) × (ns·nr)`
+- `L` - `SparseMatrixCSC`: operator of size `(size(Lc, 1)·size(L, 1)) × (ns·nu)`
 """
-space_sample_operator(nr::Integer, ns::Integer; L = I, Lc = I) =
-    kron(to_operator(Lc, ns), to_operator(L, nr))
+space_sample_operator(nu::Integer, ns::Integer; L = I, Lc = I) =
+    kron(to_operator(Lc, ns), to_operator(L, nu))
 
 """
-    sample_rows(rows, nr, ns)
+    sample_rows(rows, nu, ns)
 
-Indices, in a vectorized problem `u = vec(U)` (`U`: `nr × ns`), of the points `rows` at all
+Indices, in a vectorized problem `u = vec(U)` (`U`: `nu × ns`), of the points `rows` at all
 the frequencies or time samples (port of `define_group_mixed`). The points vary fastest, so
 that `space_sample_operator(length(rows), ns; …)` is the smoothing operator of the group.
 
 **Inputs**
 - `rows` - `AbstractVector{<:Integer}`: reconstruction points of the group
-- `nr` - `Integer`: number of reconstruction points
+- `nu` - `Integer`: number of reconstruction points
 - `ns` - `Integer`: number of frequencies or time samples
 
 **Outputs**
-- `idx` - `Vector{Int}`: indices `rows[k] + (j - 1) nr`, `k` fastest, `j = 1:ns`
+- `idx` - `Vector{Int}`: indices `rows[k] + (j - 1) nu`, `k` fastest, `j = 1:ns`
 """
-sample_rows(rows::AbstractVector{<:Integer}, nr::Integer, ns::Integer) =
-    vec([r + (j - 1) * nr for r in rows, j in 1:ns])
+sample_rows(rows::AbstractVector{<:Integer}, nu::Integer, ns::Integer) =
+    vec([r + (j - 1) * nu for r in rows, j in 1:ns])

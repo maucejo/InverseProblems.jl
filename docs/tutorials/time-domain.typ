@@ -17,22 +17,21 @@ include(isfile("_lib/setup.jl") ? "_lib/setup.jl" : "../_lib/setup.jl")
 
 #title()
 
-Transient excitations (impacts, shocks, transient loads) are naturally described in the time domain. The response of a linear structure is then a convolution of the forces with the impulse responses, which, once discretized, is again a linear problem $y = H u + n$.
+Transient excitations (impacts, shocks, transient loads) are naturally described in the time domain. The response of a linear structure is then a convolution of the forces with the impulse responses, which, once discretized, is again a linear problem $bold(y) = bold(H space.hair u) + bold(n)$.
 
 #badges(
-  badge[space–time],
+  badge[Space–time],
   badge(color: julia.red)[MIMO convolution],
   badge(color: julia.purple)[Lpq],
 )
 
 = The convolution model
 
-With $n_t$ time steps $t_k = (k-1) Delta t$, the displacement measured by sensor $i$ reads
+With $n_t$ time steps $t_k = (k-1) Delta t$, the displacement measured by sensor $i$ reads:
 
 $ y_i (t_k) = sum_(l=1)^k sum_j h_(i j)(t_k - t_l) u_j (t_l) Delta t, $
 
-where $h_(i j)$ is the impulse response between point $j$ and sensor $i$. Stacking the time samples gives a block lower-triangular (Toeplitz) matrix $H$ of size $n_m n_t times n_r n_t$, acting on $"vec"(U)$ where $U$ is the $n_r times n_t$ matrix of the forces. For a modal model, $h_(i j)(t) = sum_n phi_n (x_i) phi_n (x_j) h_n (t)$ where $h_n$ is the impulse response of the $n$-th single-degree-of-freedom mode. The modal basis of the steel beam and the impulse responses $h_n$ come from StructuralVibration.jl (`impulse_response` of a `Sdof`); the helper `convolution_matrix` of the documentation (see `_lib/setup.jl`) assembles them into the matrix $H$.
-
+where $h_(i j)$ is the impulse response between point $j$ and sensor $i$. Stacking the time samples gives a block lower-triangular (Toeplitz) matrix $bold(H)$ of size $n_m n_t times n_u n_t$, acting on $"vec"(U)$ where $U$ is the $n_r times n_t$ matrix of the forces. For a modal model, $h_(i j)(t) = sum_n phi_n (x_i) phi_n (x_j) h_n (t)$ where $h_n (t)$ is the impulse response of the $n$-th single-degree-of-freedom mode. The modal basis of the steel beam and the impulse responses $h_n$ come from StructuralVibration.jl (`impulse_response` of a `Sdof`); the helper `convolution_matrix` of the documentation (see `_lib/setup.jl`) assembles them into the matrix $bold(H)$.
 ```julia
 import StructuralVibration as SV
 using StructuralVibration: Beam, modefreq, modeshape, agwn
@@ -40,26 +39,26 @@ using StructuralVibration: Beam, modefreq, modeshape, agwn
 beam = Beam(1.0, 3e-4, 2.5e-9, 2.1e11, 7850.)
 t = range(0, 0.06, length = 150)                 # 60 ms, Δt ≈ 0.40 ms
 ωn, kn = modefreq(beam, 1 / (2.5 * step(t)))     # modes below fs / 2.5
-xm, xr = grid(12), grid(9)
-ϕm, ϕr = modeshape(beam, kn, xm), modeshape(beam, kn, xr)
+xm, xu = grid(12), grid(9)
+ϕm, ϕu = modeshape(beam, kn, xm), modeshape(beam, kn, xu)
 
-H = convolution_matrix(ωn, 0.01, ϕm, ϕr, t);
+H = convolution_matrix(ωn, 0.01, ϕm, ϕu, t);
 @printf "%d modes, H is %d × %d\n" length(ωn) size(H)...
 ```
 
 The reference excitation combines an impact-like pulse at point 3 and a 200 Hz burst at point 7 (displacement measurements, signal-to-noise ratio of 25 dB):
 
 ```julia
-Uref = zeros(length(xr), length(t))
+Uref = zeros(length(xu), length(t))
 Uref[3, :] .= @. exp(-((t - 0.01) / 0.0015)^2)
 Uref[7, :] .= @. 0.6 * sin(2π * 200 * t) * (0.02 < t < 0.04)
 
-Y0 = reshape(H * vec(Uref), length(xm), :)       # nm × nt measurements
+Y0 = reshape(H * vec(Uref), length(xm), :) # nm × nt measurements
 Y = agwn(Y0, 25)
 prob = InverseProblem(H, Y)
 ```
 
-The measurements are simulated with the same discrete model as the one used for the inversion; the impulse responses are however those of the continuous structure, sampled at the time steps. Since `Y` is a matrix and `H` a dense matrix with `size(H, 1) == length(Y)`, the problem is interpreted as a space–time problem: the unknown is a `9 × 150` matrix.
+The measurements are simulated with the same discrete model as the one used for the inversion (#emoji.warning _inverse crime_); the impulse responses are however those of the continuous structure, sampled at the time steps. Since `Y` is a matrix and `H` a dense matrix with `size(H, 1) == length(Y)`, the problem is interpreted as a space–time problem: the unknown is a `9 × 150` matrix.
 
 = Reconstructions
 
@@ -79,7 +78,7 @@ sols = [name => solve(prob, f) for (name, f) in cases];
 #| fig-alt-text: "Reconstructed time histories at the two loaded points, compared with the reference."
 fig = Figure(size = (840, 520))
 for (k, i) in enumerate((3, 7))
-    ax = Axis(fig[k, 1], title = @sprintf("Point %d (x = %.2f m)", i, xr[i]),
+    ax = Axis(fig[k, 1], title = @sprintf("Point %d (x = %.2f m)", i, xu[i]),
               xlabel = k == 2 ? "Time (ms)" : "", ylabel = "Force (N)")
     lines!(ax, 1e3 .* t, Uref[i, :], color = FG, linestyle = :dash, linewidth = 2.5, label = "Reference")
     for (name, s) in sols[[1, 4]]
@@ -96,7 +95,7 @@ fig = Figure(size = (840, 280))
 maps = ["Reference" => Uref, "Tikhonov (GCV)" => last(sols[1]).u, "Multiplicative ℓ2,0.5" => last(sols[4]).u]
 for (k, (name, U)) in enumerate(maps)
     ax = Axis(fig[1, k], title = name, xlabel = "Time (ms)", ylabel = k == 1 ? "x (m)" : "")
-    heatmap!(ax, 1e3 .* t, xr, transpose(U), colormap = :balance, colorrange = (-1, 1))
+    heatmap!(ax, 1e3 .* t, xu, transpose(U), colormap = :balance, colorrange = (-1, 1))
 end
 fig
 ```
@@ -104,8 +103,9 @@ fig
 ```julia
 #| echo: false
 #| results: "typst"
-typst_table(["Method", "Relative error", "Iterations"],
-            [(name, @sprintf("%.1f %%", relerr(s.u, Uref)), s.iterations) for (name, s) in sols])
+typst_table(["Method", "Relative error", "Correlation", "Iterations"],
+            [(name, @sprintf("%.1f %%", relative_error(Uref, s)), @sprintf("%.1f %%", correlation(Uref, s)), s.iterations)
+             for (name, s) in sols])
 ```
 
 The quadratic prior spreads the energy of the forces over all the points, while the mixed norm $ell_(2,0.5)$ concentrates it on the two loaded points.

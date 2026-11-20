@@ -3,10 +3,7 @@
 #   julia --project=docs docs/_lib/make_api.jl      (from the repository root)
 #   julia --project=. _lib/make_api.jl              (from docs/)
 #
-# The page is generated as static Typst source, rather than printed by a chunk with
-# `results: "typst"`: code blocks are then ordinary fenced blocks (`#| eval: false`), which
-# Calepin highlights with the theme of the site (light and dark modes). Run it again whenever a
-# docstring changes; `build.sh` does it before each build.
+# The page is generated as static Typst source, rather than printed by a chunk with `results: "typst"`: code blocks are then ordinary fenced blocks (`#| eval: false`), which Calepin highlights with the theme of the site (light and dark modes). Run it again whenever a docstring changes; `build.sh` does it before each build.
 
 import Pkg
 Pkg.activate(dirname(@__DIR__); io = devnull)
@@ -35,13 +32,20 @@ const SECTIONS = [
      [:solve, :InverseSolution]),
     ("Uncertainty quantification", "Posterior quantities of a solution obtained with `solve(...; precision = true)`.",
      [:posterior_std, :posterior_covariance, :posterior_samples, :credible_interval]),
+    ("Ill-posedness", "Discrete Picard condition and conditioning of a problem, independent of the regularization.",
+     [:ill_posedness, :IllPosedness]),
+    ("Visualization", "Plots, provided by the Makie extension of the package: load a Makie backend first, e.g. `using CairoMakie`.",
+     [:picardplot, :picardplot!]),
+    ("Performance indicators", "Trueness, precision and accuracy of a reconstruction with respect to a reference field.",
+     [:relative_error, :correlation, :precision_metric, :accuracy_metric, :performance_ratio]),
 ]
 
 const DOCUMENTED = Set(s for (_, _, syms) in SECTIONS for s in syms)
 
 # ---------------------------------------------------------------------------- Typst helpers
 
-label(s) = "api-" * string(s)
+# Typst labels cannot contain `!` (mutating functions such as `picardplot!`)
+label(s) = "api-" * replace(string(s), "!" => "-bang")
 
 """Escape a plain string for Typst markup."""
 function esc(s::AbstractString)

@@ -48,7 +48,7 @@ function elementwise_solve(prob, c, reg, τnspec, request, tol, maxiter, init)
     N = ndata(c)
 
     sys = linear_system(c, reg.L)
-    U = Matrix{eltype(c)}(undef, c.nr, c.ns)
+    U = Matrix{eltype(c)}(undef, c.nu, c.ns)
     Unew = similar(U)
     weighted_solve!(U, sys, initial_weights(c, reg, initial_lambda(init, c, reg)))
     Vbuf = smoothing_buffer(reg.L, U)

@@ -130,6 +130,9 @@ title = "Theory"
   target = "theory/uncertainty.typ"
 
   [[sidebar.section.item]]
+  target = "theory/performance.typ"
+
+  [[sidebar.section.item]]
   target = "theory/references.typ"
 
 [[sidebar.section]]

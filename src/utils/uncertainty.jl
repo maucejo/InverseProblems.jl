@@ -19,8 +19,8 @@ posterior_std(sol::InverseSolution) =
 
 Posterior covariance `Q⁻¹` of the solution, computed from the factorization of the precision.
 
-* `full = false`: marginal covariances of the samples (frequencies or time steps), i.e. the `nr × nr` diagonal blocks `Σ_jj` of the covariance of `vec(u)`. Each block is obtained by applying `A⁻¹` to the `nr` corresponding columns of the identity (block solves with the factorization of the solver: normal equations, Woodbury identity, sparse Cholesky), so that the `n × n` covariance is never formed;
-* `full = true`: covariance of `vec(u)`, `(nr·ns) × (nr·ns)`, with the correlations between
+* `full = false`: marginal covariances of the samples (frequencies or time steps), i.e. the `nu × nu` diagonal blocks `Σ_jj` of the covariance of `vec(u)`. Each block is obtained by applying `A⁻¹` to the `nu` corresponding columns of the identity (block solves with the factorization of the solver: normal equations, Woodbury identity, sparse Cholesky), so that the `n × n` covariance is never formed;
+* `full = true`: covariance of `vec(u)`, `(nu·ns) × (nu·ns)`, with the correlations between
   samples (sparse block-diagonal matrix when the samples are independent or block-diagonal).
 
 **Inputs**

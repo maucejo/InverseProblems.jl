@@ -27,6 +27,7 @@ The methods implemented in SourceEstimation.jl have been developed and published
   [$lambda_"max"$ initialization], [`LambdaMax`], [@Kim2007],
   [Relevance vector regression], [`ElementWise`], [@Tipping2001],
   [Perturbation–optimization sampling], [`posterior_samples`], [@Orieux2012 @Papandreou2010],
+  [Trueness, precision and accuracy], [`relative_error`, `precision_metric`, `accuracy_metric`], [@ISO5725 @VIM2012],
 )
 
 The general background on discrete ill-posed problems can be found in @Hansen2010, and recent developments on high-dimensional Gaussian sampling in @Gilavert2015 @Vono2022.

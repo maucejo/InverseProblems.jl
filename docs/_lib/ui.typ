@@ -1,8 +1,9 @@
 // UI components of the SourceEstimation.jl documentation (HTML target).
 // Styles live in theme/css/sourceestimation.css.
 
-// Generic HTML element with an optional class. Outside of the HTML target (e.g. the query
-// pass of Calepin, which collects the labels and headings of the page), the body is returned
+#let bm(x) = $bold(upright(#x))$
+
+// Generic HTML element with an optional class. Outside of the HTML target (e.g. the query pass of Calepin, which collects the labels and headings of the page), the body is returned
 // as is, so that the labels and headings it contains are not lost.
 #let el(tag, class: none, attrs: (:), body) = context {
   if target() == "html" {
@@ -104,7 +105,7 @@
   "\u{30C}": $\u{2C7}$,  // caron
 )
 
-#let math-font = "XITS Math"
+#let math-font = "STIX Two Math"
 
 // URL prefix from the current page back to the site root (same logic as
 // Calepin's runtime, which cannot be imported from a helper module).
@@ -121,17 +122,12 @@
 // @font-face is emitted here, with the path resolved by Calepin for this page.
 #let _math-font-face() = context {
   if target() == "html" {
-    let href = _site-root() + "assets/fonts/XITSMath-Regular.woff2"
-    el("style", "@font-face { font-family: \"XITS Math\"; src: local(\"XITS Math\"), local(\"XITSMath-Regular\"), url(\"" + href + "\") format(\"woff2\"); font-display: swap; }")
+    let href = _site-root() + "assets/fonts/STIXTwoMath-Regular.woff2"
+    el("style", "@font-face { font-family: \"STIX Two Math\"; src: local(\"STIX Two Math\"), local(\"STIXTwoMath-Regular\"), url(\"" + href + "\") format(\"woff2\"); font-display: swap; }")
   }
 }
 
-// Fences of the inline (MathML) equations. Browsers stretch the fences (parentheses,
-// brackets, bars) to the height of their content, and with the large ascent/descent of
-// the math italic letters they pick an enlarged glyph with wide side bearings, which
-// looks like spaces around the content: (μ, Σ) → ( μ, Σ ). Typst cannot emit
-// `stretchy="false"`, so this script sets it, except when the fence encloses tall
-// content (fraction, limits, root, matrix), where stretching is needed.
+// Fences of the inline (MathML) equations. Browsers stretch the fences (parentheses, brackets, bars) to the height of their content, and with the large ascent/descent of the math italic letters they pick an enlarged glyph with wide side bearings, which looks like spaces around the content: (μ, Σ) → ( μ, Σ ). Typst cannot emit `stretchy="false"`, so this script sets it, except when the fence encloses tall content (fraction, limits, root, matrix), where stretching is needed.
 #let _fence-script = "document.addEventListener('DOMContentLoaded', function () {
   var fences = '()[]{}|‖⟨⟩⌊⌋⌈⌉';
   var tall = 'mfrac, munder, mover, munderover, msqrt, mroot, mtable';
@@ -147,9 +143,7 @@
 }
 
 #let math-html(body) = {
-  // Font of the SVG equations (Typst draws the glyphs, so it only has to be
-  // installed where `calepin compile` runs). Inline MathML uses the web font
-  // declared by _math-font-face.
+  // Font of the SVG equations (Typst draws the glyphs, so it only has to be installed where `calepin compile` runs). Inline MathML uses the web font declared by _math-font-face.
   show math.equation: set text(font: math-font)
   show math.equation.where(block: true): it => context {
     if target() != "html" { return it }

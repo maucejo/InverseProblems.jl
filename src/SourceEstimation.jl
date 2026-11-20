@@ -20,6 +20,9 @@ sol.u                                               # reconstructed field
 * Parameter choice: [`LCurve`](@ref), [`GCV`](@ref), [`BayesEstimator`](@ref), [`Heuristic`](@ref)
 * Algorithms:       [`IR`](@ref), [`MAP`](@ref)
 * Result:           [`InverseSolution`](@ref)
+* Ill-posedness:    [`ill_posedness`](@ref) (discrete Picard condition, conditioning)
+* Visualization:    [`picardplot`](@ref) (Makie extension: load a Makie backend first)
+* Performance:      [`relative_error`](@ref), [`correlation`](@ref), [`precision_metric`](@ref), [`accuracy_metric`](@ref), [`performance_ratio`](@ref)
 """
 module SourceEstimation
 
@@ -66,6 +69,16 @@ include("utils/posterior.jl")  # posterior precision, perturbation–optimizatio
 include("utils/uncertainty.jl") # posterior samples and credible intervals
 export posterior_std, posterior_covariance, posterior_samples, credible_interval
 
+include("indicators/performance.jl") # trueness, precision and accuracy of a reconstruction
+export relative_error, correlation, precision_metric, accuracy_metric, performance_ratio
+
+include("indicators/ill_posedness.jl") # discrete Picard condition, conditioning, SVD decay
+export ill_posedness, IllPosedness
+
+# Visualization (implemented in the Makie extension, ext/SourceEstimationMakieExt.jl) -----------
+include("visualization/plots.jl")
+export picardplot, picardplot!
+
 # Solvers -------------------------------------------------------------------------------------
 include("solvers/ir.jl") # IR algorithm: additive and multiplicative formulations
 
@@ -73,5 +86,9 @@ include("solvers/map.jl") # MAP: hierarchical Bayesian formulation
 include("solvers/elementwise.jl") # element-wise Bayesian (RVR)
 include("solvers/strategy.jl")    # resolution strategy: joint / frequency by frequency
 export solve
+
+function __init__()
+    Base.Experimental.register_error_hint(plot_error_hint, MethodError)
+end
 
 end

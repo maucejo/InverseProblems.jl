@@ -1850,6 +1850,10 @@ deps = ["LinearAlgebra", "Random", "SparseArrays", "SpecialFunctions", "Statisti
 path = ".."
 uuid = "0a55c760-1160-4ed6-b9f1-b545e474d1f0"
 version = "0.1.0"
+weakdeps = ["Makie"]
+
+    [deps.SourceEstimation.extensions]
+    SourceEstimationMakieExt = "Makie"
 
 [[deps.SparseArrays]]
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]

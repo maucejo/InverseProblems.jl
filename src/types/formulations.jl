@@ -118,7 +118,7 @@ struct Bayesian{R<:RegularizationTerm, N, S, Q<:Union{Estimated,Fixed}} <: Formu
 end
 
 function Bayesian(prior::RegularizationTerm; τn = nothing, τs = Estimated(),
-                  q::Union{Estimated,Fixed} = Estimated(), shape_bounds = (0.05, 2.0))
+                  q::Union{Estimated,Fixed} = Estimated(), shape_bounds = (0.01, 2.0))
     τn isa AbstractVector && throw(ArgumentError("τn must be `Estimated()` or a positive number"))
     check_precision(τn)
     check_precision(τs)

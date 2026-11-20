@@ -3,7 +3,7 @@
 """
     LinearOperator
 
-Internal representation of the forward operator `H`. The layout of the unknown is always a matrix `U` of size `nr × ns`: rows are reconstruction points (space), columns are samples (frequencies or time steps). A single-snapshot problem has `ns = 1`.
+Internal representation of the forward operator `H`. The layout of the unknown is always a matrix `U` of size `nu × ns`: rows are reconstruction points (space), columns are samples (frequencies or time steps). A single-snapshot problem has `ns = 1`.
 """
 abstract type LinearOperator end
 
@@ -12,7 +12,7 @@ Dense operator acting on `vec(U)` (single snapshot, or space–time convolution 
 """
 struct DenseOperator{M<:AbstractMatrix} <: LinearOperator
     H::M
-    nr::Int
+    nu::Int
     ns::Int
 end
 
@@ -29,16 +29,16 @@ whose frequencies are coupled. Solved with sparse Cholesky factorizations.
 """
 struct SparseOperator{M<:AbstractSparseMatrix} <: LinearOperator
     H::M
-    nr::Int
+    nu::Int
     ns::Int
 end
 
 # Dense or sparse operator acting on vec(U), depending on the storage of H
-vec_operator(H::AbstractMatrix, nr, ns) = DenseOperator(H, nr, ns)
-vec_operator(H::AbstractSparseMatrix, nr, ns) = SparseOperator(H, nr, ns)
+vec_operator(H::AbstractMatrix, nu, ns) = DenseOperator(H, nu, ns)
+vec_operator(H::AbstractSparseMatrix, nu, ns) = SparseOperator(H, nu, ns)
 
-unknown_size(op::DenseOperator) = (op.nr, op.ns)
-unknown_size(op::SparseOperator) = (op.nr, op.ns)
+unknown_size(op::DenseOperator) = (op.nu, op.ns)
+unknown_size(op::SparseOperator) = (op.nu, op.ns)
 unknown_size(op::BlockDiagonalOperator) = (size(first(op.blocks), 2), length(op.blocks))
 
 # Problem ----------------------------------------------------------------------
@@ -50,10 +50,10 @@ Linear inverse problem `y = H u + n`. The layout of the unknown depends on the t
 
 | `H`                                   | `y`                 | unknown `u`             | use case        |
 |:--------------------------------------|:--------------------|:------------------------|:----------------|
-| `AbstractMatrix` (`nm × nr`)          | `AbstractVector`    | vector (`nr`)           | one frequency   |
-| `AbstractVector` of `nm × nr` matrices| `AbstractMatrix` (`nm × nf`) | matrix `nr × nf` | space–frequency |
-| `AbstractArray{T,3}` (`nm × nr × nf`) | `AbstractMatrix` (`nm × nf`) | matrix `nr × nf` | space–frequency |
-| `AbstractMatrix` (`nm·nt × nr·nt`)    | `AbstractMatrix` (`nm × nt`) | matrix `nr × nt` | space–time      |
+| `AbstractMatrix` (`nm × nu`)          | `AbstractVector`    | vector (`nu`)           | one frequency   |
+| `AbstractVector` of `nm × nu` matrices| `AbstractMatrix` (`nm × nf`) | matrix `nu × nf` | space–frequency |
+| `AbstractArray{T,3}` (`nm × nu × nf`) | `AbstractMatrix` (`nm × nf`) | matrix `nu × nf` | space–frequency |
+| `AbstractMatrix` (`nm·nt × nu·nt`)    | `AbstractMatrix` (`nm × nt`) | matrix `nu × nt` | space–time      |
 | `AbstractSparseMatrix`                | `AbstractVector` or `AbstractMatrix` | as above | assembled problem (e.g. vectorized space–frequency problem with coupled frequencies) |
 
 Rows of the unknown always correspond to reconstruction points, so that [`Groups`](@ref), smoothing operators and mixed norms [`Lpq`](@ref) have the same meaning whatever the domain.
@@ -71,28 +71,22 @@ struct InverseProblem{Op<:LinearOperator, Y<:AbstractVecOrMat}
 end
 
 function InverseProblem(H::AbstractMatrix, y::AbstractVector)
-    size(H, 1) == length(y) ||
-        throw(DimensionMismatch("H has $(size(H, 1)) rows but y has length $(length(y))"))
+    size(H, 1) == length(y) || throw(DimensionMismatch("H has $(size(H, 1)) rows but y has length $(length(y))"))
     return InverseProblem(vec_operator(H, size(H, 2), 1), y)
 end
 
 function InverseProblem(H::AbstractMatrix, y::AbstractMatrix)
     ns = size(y, 2)
-    size(H, 1) == length(y) ||
-        throw(DimensionMismatch("H has $(size(H, 1)) rows but y has $(length(y)) entries"))
-    size(H, 2) % ns == 0 ||
-        throw(DimensionMismatch("size(H, 2) = $(size(H, 2)) is not a multiple of the number of samples $ns"))
+    size(H, 1) == length(y) || throw(DimensionMismatch("H has $(size(H, 1)) rows but y has $(length(y)) entries"))
+    size(H, 2) % ns == 0 || throw(DimensionMismatch("size(H, 2) = $(size(H, 2)) is not a multiple of the number of samples $ns"))
     return InverseProblem(vec_operator(H, size(H, 2) ÷ ns, ns), y)
 end
 
 function InverseProblem(H::AbstractVector{<:AbstractMatrix}, y::AbstractMatrix)
-    length(H) == size(y, 2) ||
-        throw(DimensionMismatch("$(length(H)) transfer matrices for $(size(y, 2)) samples"))
-    nm, nr = size(first(H))
-    all(h -> size(h) == (nm, nr), H) ||
-        throw(DimensionMismatch("all transfer matrices must have the same size"))
-    nm == size(y, 1) ||
-        throw(DimensionMismatch("transfer matrices have $nm rows but y has $(size(y, 1))"))
+    length(H) == size(y, 2) || throw(DimensionMismatch("$(length(H)) transfer matrices for $(size(y, 2)) samples"))
+    nm, nu = size(first(H))
+    all(h -> size(h) == (nm, nu), H) || throw(DimensionMismatch("all transfer matrices must have the same size"))
+    nm == size(y, 1) || throw(DimensionMismatch("transfer matrices have $nm rows but y has $(size(y, 1))"))
     return InverseProblem(BlockDiagonalOperator(collect(H)), y)
 end
 
@@ -105,7 +99,7 @@ output_shape(prob::InverseProblem{<:Any,<:AbstractVector}, U::AbstractMatrix) = 
 output_shape(::InverseProblem{<:Any,<:AbstractMatrix}, U::AbstractMatrix) = U
 
 function Base.show(io::IO, prob::InverseProblem)
-    nr, ns = unknown_size(prob)
-    print(io, "InverseProblem(", length(prob.y), " data, unknown ", nr, "×", ns,
+    nu, ns = unknown_size(prob)
+    print(io, "InverseProblem(", length(prob.y), " data, unknown ", nu, "×", ns,
           ", ", nameof(typeof(prob.H)), ")")
 end

@@ -5,12 +5,12 @@ using SparseArrays
 using Test
 
 # Simply supported beam, modal synthesis of the transfer functions
-function beam_frf(ω; nm = 30, nr = 25, nmodes = 30, ξ = 0.01)
+function beam_frf(ω; nm = 30, nu = 25, nmodes = 30, ξ = 0.01)
     xm = range(0, 1, length = nm + 2)[2:end-1]
-    xr = range(0, 1, length = nr + 2)[2:end-1]
+    xr = range(0, 1, length = nu + 2)[2:end-1]
     ωn = [(n * π)^2 * 50 for n in 1:nmodes]
     return [sum(sin(n * π * xm[i]) * sin(n * π * xr[j]) / (ωn[n]^2 - ω^2 + 2im * ξ * ωn[n] * ω)
-                for n in 1:nmodes) for i in 1:nm, j in 1:nr]
+                for n in 1:nmodes) for i in 1:nm, j in 1:nu]
 end
 
 # Reference inverse by a factorization-based solve (no explicit inverse): A \ I
@@ -80,18 +80,18 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test size(diff_operator(C, 1; npts = 2)) == (35 - 5, 35)
         @test_throws ArgumentError diff_operator([0.0 0; 1 0; 3 0], 1)    # non-uniform spacing
         # space–frequency / space–time operators of vectorized problems
-        nr, ns = 6, 5
-        Ux = randn(ComplexF64, nr, ns)
-        Ls, Lx = diff_operator(ns, 1; npts = 2), diff_operator(nr, 2)
-        @test space_sample_operator(nr, ns; Lc = Ls) * vec(Ux) ≈ vec(Ux * transpose(Ls))
-        @test space_sample_operator(nr, ns; L = Lx) * vec(Ux) ≈ vec(Lx * Ux)
-        @test space_sample_operator(nr, ns; L = Lx, Lc = Ls) * vec(Ux) ≈ vec(Lx * Ux * transpose(Ls))
-        @test size(space_sample_operator(nr, ns; Lc = Ls)) == ((ns - 1) * nr, ns * nr)
-        @test space_sample_operator(nr, ns) == sparse(1.0I, nr * ns, nr * ns)
-        @test_throws DimensionMismatch space_sample_operator(nr, ns; Lc = diff_operator(ns + 1, 1))
-        @test sample_rows([2, 4], nr, ns) == [2, 4, 8, 10, 14, 16, 20, 22, 26, 28]
+        nu, ns = 6, 5
+        Ux = randn(ComplexF64, nu, ns)
+        Ls, Lx = diff_operator(ns, 1; npts = 2), diff_operator(nu, 2)
+        @test space_sample_operator(nu, ns; Lc = Ls) * vec(Ux) ≈ vec(Ux * transpose(Ls))
+        @test space_sample_operator(nu, ns; L = Lx) * vec(Ux) ≈ vec(Lx * Ux)
+        @test space_sample_operator(nu, ns; L = Lx, Lc = Ls) * vec(Ux) ≈ vec(Lx * Ux * transpose(Ls))
+        @test size(space_sample_operator(nu, ns; Lc = Ls)) == ((ns - 1) * nu, ns * nu)
+        @test space_sample_operator(nu, ns) == sparse(1.0I, nu * ns, nu * ns)
+        @test_throws DimensionMismatch space_sample_operator(nu, ns; Lc = diff_operator(ns + 1, 1))
+        @test sample_rows([2, 4], nu, ns) == [2, 4, 8, 10, 14, 16, 20, 22, 26, 28]
         rows = [2, 3, 4]
-        @test space_sample_operator(3, ns; Lc = Ls) * vec(Ux)[sample_rows(rows, nr, ns)] ≈
+        @test space_sample_operator(3, ns; Lc = Ls) * vec(Ux)[sample_rows(rows, nu, ns)] ≈
               vec(Ux[rows, :] * transpose(Ls))
         # space–frequency operator of MSSP 2018: Lf of Eq. (11), L = (I_N ⊗ Ls)(Lf ⊗ I_M) of
         # Eq. (15), regularization term ‖L F‖_{p,q}^q of Eq. (14)
@@ -125,28 +125,28 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         Random.seed!(0)
         IP = SourceEstimation
         # every regime × smoothing operator × field, against the explicit formulas
-        for T in (Float64, ComplexF64), (nm, nr) in ((12, 8), (8, 8), (5, 8)), ns in (1, 3)
-            Lsq = diagm(nr, nr, 0 => fill(2.0, nr), 1 => -ones(nr - 1))       # square invertible
-            Lrect = diagm(nr, nr, 0 => -ones(nr), 1 => ones(nr - 1))[1:nr-1, :]   # rectangular
-            for (Lop, Lm) in ((IP.IdentitySmoothing(), Matrix(1.0I, nr, nr)),
+        for T in (Float64, ComplexF64), (nm, nu) in ((12, 8), (8, 8), (5, 8)), ns in (1, 3)
+            Lsq = diagm(nu, nu, 0 => fill(2.0, nu), 1 => -ones(nu - 1))       # square invertible
+            Lrect = diagm(nu, nu, 0 => -ones(nu), 1 => ones(nu - 1))[1:nu-1, :]   # rectangular
+            for (Lop, Lm) in ((IP.IdentitySmoothing(), Matrix(1.0I, nu, nu)),
                               (IP.MatrixSmoothing(sparse(Lsq)), Lsq),
                               (IP.MatrixSmoothing(sparse(Lrect)), Lrect))
                 Lg = kron(I(ns), Lm)
                 # dense operator acting on vec(U) (space–time layout when ns > 1)
-                H, y = randn(T, nm * ns, nr * ns), randn(T, nm, ns)
+                H, y = randn(T, nm * ns, nu * ns), randn(T, nm, ns)
                 c = IP.linear_cache(InverseProblem(H, ns == 1 ? vec(y) : y))
-                @test (c isa IP.Underdetermined) == (nm < nr)
+                @test (c isa IP.Underdetermined) == (nm < nu)
                 D = rand(size(Lm, 1), ns) .+ 0.1
                 A = H'H + Lg' * Diagonal(vec(D)) * Lg
                 @test vec(IP.weighted_solve(c, Lop, D)) ≈ A \ (H' * vec(y))
-                @test IP.inverse_apply(IP.posterior_factor(c, Lop, D), Matrix{T}(I, nr * ns, nr * ns)) ≈ solve_identity(A)
+                @test IP.inverse_apply(IP.posterior_factor(c, Lop, D), Matrix{T}(I, nu * ns, nu * ns)) ≈ solve_identity(A)
                 @test IP.precision_matrix(c, Lop, D, 2.0) ≈ 2A
                 # block-diagonal operator
-                Hs = [randn(T, nm, nr) for _ in 1:ns]
+                Hs = [randn(T, nm, nu) for _ in 1:ns]
                 cb = IP.linear_cache(InverseProblem(Hs, y))
                 U = IP.weighted_solve(cb, Lop, D)
                 Fb = IP.posterior_factor(cb, Lop, D)
-                Σ = [IP.inverse_apply(Fb[j], Matrix{T}(I, nr, nr)) for j in 1:ns]
+                Σ = [IP.inverse_apply(Fb[j], Matrix{T}(I, nu, nu)) for j in 1:ns]
                 for j in 1:ns
                     Aj = Hs[j]'Hs[j] + Lm' * Diagonal(D[:, j]) * Lm
                     @test U[:, j] ≈ Aj \ (Hs[j]' * y[:, j])
@@ -257,7 +257,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test argmax(e) == 17
         @test e[17] / sum(e) > 0.95
         @test size(s.u) == size(U)
-        # posterior covariance: one nr × nr matrix per frequency
+        # posterior covariance: one nu × nu matrix per frequency
         s = solve(prob, Additive(Lq(2.0); λ = 1e-12); precision = true)
         @test length(s.precision) == length(ωs) && length(posterior_covariance(s)) == length(ωs)
         @test size(posterior_std(s)) == size(U)
@@ -269,9 +269,9 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
     @testset "Operator along the samples Lf (MSSP 2018)" begin
         IP = SourceEstimation
         Random.seed!(14)
-        nm, nr, nf = 14, 10, 8
-        Hs = [randn(ComplexF64, nm, nr) for _ in 1:nf]
-        U = zeros(ComplexF64, nr, nf); U[4, :] .= 1
+        nm, nu, nf = 14, 10, 8
+        Hs = [randn(ComplexF64, nm, nu) for _ in 1:nf]
+        U = zeros(ComplexF64, nu, nf); U[4, :] .= 1
         Y = reduce(hcat, [Hs[j] * U[:, j] for j in 1:nf]) .+ 0.01randn(ComplexF64, nm, nf)
         Lf = diff_operator(nf, 1)
         pb, pv = InverseProblem(Hs, Y), InverseProblem(blockdiag(sparse.(Hs)...), vec(Y))
@@ -280,41 +280,41 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test IP.strategy(pb, Multiplicative(Lpq(2, 0.5; Lc = Lf))) isa IP.Assembled
         # native Lf = vectorized problem with L = kron(Lf, I)
         a = solve(pb, Multiplicative(Lpq(2, 0.5; Lc = Lf)); init = 1e-2, precision = true)
-        b = solve(pv, Multiplicative(Lpq(2, 0.5; L = space_sample_operator(nr, nf; Lc = Lf), samples = nf));
+        b = solve(pv, Multiplicative(Lpq(2, 0.5; L = space_sample_operator(nu, nf; Lc = Lf), samples = nf));
                   init = 1e-2, precision = true)
-        @test vec(a.u) ≈ b.u && a.λ ≈ b.λ && size(a.u) == (nr, nf)
+        @test vec(a.u) ≈ b.u && a.λ ≈ b.λ && size(a.u) == (nu, nf)
         # sparse precision; marginal blocks (block solves) or full covariance
         @test a.precision isa SparseMatrixCSC && a.precision ≈ b.precision
         Σb = posterior_covariance(b)                                     # vectorized: one block
         @test posterior_covariance(a; full = true) ≈ Σb ≈ solve_identity(Matrix(a.precision))
         Σa = posterior_covariance(a)
-        @test length(Σa) == nf && size(Σa[1]) == (nr, nr)
-        @test all(Σa[j] ≈ Σb[(j-1)*nr+1:j*nr, (j-1)*nr+1:j*nr] for j in 1:nf)
-        @test posterior_std(a) ≈ reshape(sqrt.(real(diag(Σb))), nr, nf)
+        @test length(Σa) == nf && size(Σa[1]) == (nu, nu)
+        @test all(Σa[j] ≈ Σb[(j-1)*nu+1:j*nu, (j-1)*nu+1:j*nu] for j in 1:nf)
+        @test posterior_std(a) ≈ reshape(sqrt.(real(diag(Σb))), nu, nf)
         lo, up = credible_interval(a; nsamples = 200)
-        @test size(lo) == (nr, nf)
+        @test size(lo) == (nu, nf)
         # joint samples (sparse Cholesky R⁻¹ z): empirical covariance → full covariance
-        X = reshape(posterior_samples(a, 40_000; rng = Xoshiro(2)), nr * nf, :)
+        X = reshape(posterior_samples(a, 40_000; rng = Xoshiro(2)), nu * nf, :)
         Xc = X .- vec(a.u)
         @test isapprox(Xc * Xc' / size(X, 2), Σb; rtol = 0.05)
         # space–time (dense): marginal blocks per time step from the dense covariance
-        Hst, Yst = randn(nm * 4, nr * 4), randn(nm, 4)
+        Hst, Yst = randn(nm * 4, nu * 4), randn(nm, 4)
         sm = solve(InverseProblem(Hst, Yst), Additive(Lpq(2, 1); λ = 0.1); precision = true)
         Σm, Σf = posterior_covariance(sm), posterior_covariance(sm; full = true)
-        @test length(Σm) == 4 && Σm[3] ≈ Σf[2nr+1:3nr, 2nr+1:3nr] && Σf ≈ solve_identity(Matrix(sm.precision))
+        @test length(Σm) == 4 && Σm[3] ≈ Σf[2nu+1:3nu, 2nu+1:3nu] && Σf ≈ solve_identity(Matrix(sm.precision))
         # groups, per-point noise variances
         r = 0.01 .+ rand(nm)
         a = solve(pb, Multiplicative(Groups(1:5 => Lpq(2, 0.5; Lc = Lf), 6:10 => Lq(1.0))); R = r, init = 1e-2)
-        b = solve(pv, Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lpq(2, 0.5; L = space_sample_operator(5, nf; Lc = Lf), samples = nf),
-                                            sample_rows(6:10, nr, nf) => Lq(1.0))); R = repeat(r, nf), init = 1e-2)
+        b = solve(pv, Multiplicative(Groups(sample_rows(1:5, nu, nf) => Lpq(2, 0.5; L = space_sample_operator(5, nf; Lc = Lf), samples = nf),
+                                            sample_rows(6:10, nu, nf) => Lq(1.0))); R = repeat(r, nf), init = 1e-2)
         @test vec(a.u) ≈ b.u
         # space–time problem (dense convolution matrix), spatial and temporal operators
         nt = 6
-        Ht, Yt = randn(nm * nt, nr * nt), randn(nm, nt)
-        Lsp, Lt = diff_operator(nr, 2; npts = 5), diff_operator(nt, 1)
+        Ht, Yt = randn(nm * nt, nu * nt), randn(nm, nt)
+        Lsp, Lt = diff_operator(nu, 2; npts = 5), diff_operator(nt, 1)
         a = solve(InverseProblem(Ht, Yt), Additive(Lpq(2, 1; L = Lsp, Lc = Lt); λ = 0.1))
         b = solve(InverseProblem(Ht, vec(Yt)),
-                  Additive(Lpq(2, 1; L = space_sample_operator(nr, nt; L = Lsp, Lc = Lt), samples = nt); λ = 0.1))
+                  Additive(Lpq(2, 1; L = space_sample_operator(nu, nt; L = Lsp, Lc = Lt), samples = nt); λ = 0.1))
         @test vec(a.u) ≈ b.u
         # errors
         @test_throws ArgumentError solve(InverseProblem(Hs[1], Y[:, 1]), Multiplicative(Lpq(2, 0.5; Lc = Lf)))
@@ -363,13 +363,13 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         Y = Y0 .+ sqrt.(r) .* randn(ComplexF64, size(Y0))
         Xr, Pr, λr = lpq_reg_ref(Hs, Y, 2.0, 0.5, r)
         s = solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)); R = r, init = LambdaMax(),
-                  maxiter = 50, precision = true)
+                  maxiter = 50, tol = 1e-8, precision = true)   # stopping rule of the reference (crit < 1e-8)
         @test s.u ≈ Xr rtol = 1e-8
         @test s.λ ≈ λr rtol = 1e-8
         @test all(posterior_covariance(s)[f] ≈ Pr[f] for f in eachindex(ωs))
         # per-point variances: vector, Diagonal or diagonal matrix nm × nm
         for R in (Diagonal(r), Matrix(Diagonal(r)))
-            @test solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)); R, init = LambdaMax(), maxiter = 50).u ≈ s.u
+            @test solve(InverseProblem(Hs, Y), Multiplicative(Lpq(2, 0.5)); R, init = LambdaMax(), maxiter = 50, tol = 1e-8).u ≈ s.u
         end
         @test_throws ArgumentError Additive(Lq(1.0); λ = LambdaMax())
     end
@@ -478,11 +478,11 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
             return X, solve_identity(AtA + Λ)
         end
         Random.seed!(9)
-        for T in (Float64, ComplexF64), (nm, nr) in ((30, 20), (15, 25))
+        for T in (Float64, ComplexF64), (nm, nu) in ((30, 20), (15, 25))
             σ = 0.05
-            u = zeros(T, nr); u[[4, 13]] .= (1, -2)
+            u = zeros(T, nu); u[[4, 13]] .= (1, -2)
             # dense operator, R = σ² I (τn = 1)
-            H = randn(T, nm, nr)
+            H = randn(T, nm, nu)
             y = H * u + σ * randn(T, nm)
             s = solve(InverseProblem(H, y), Bayesian(Lq(2.0)), ElementWise(); R = σ^2 * I, precision = true)
             Xr, Pr = rvr_ref(H / σ, y / σ)
@@ -490,7 +490,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
             @test posterior_covariance(s) ≈ Pr rtol = 1e-6
             @test s.hyper.τn == 1
             # block-diagonal operator: one RVR per frequency
-            Hs = [randn(T, nm, nr) for _ in 1:3]
+            Hs = [randn(T, nm, nu) for _ in 1:3]
             Y = reduce(hcat, [Hj * u + σ * randn(T, nm) for Hj in Hs])
             s = solve(InverseProblem(Hs, Y), Bayesian(Lq(2.0)), ElementWise(); R = σ^2 * I, precision = true)
             for j in 1:3
@@ -553,9 +553,9 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
 
     @testset "Sparse operators (vectorized space–frequency problems)" begin
         Random.seed!(12)
-        nm, nr, nf = 12, 10, 8
-        Hs = [randn(ComplexF64, nm, nr) for _ in 1:nf]
-        U = zeros(ComplexF64, nr, nf); U[4, :] .= 1
+        nm, nu, nf = 12, 10, 8
+        Hs = [randn(ComplexF64, nm, nu) for _ in 1:nf]
+        U = zeros(ComplexF64, nu, nf); U[4, :] .= 1
         Y = reduce(hcat, [Hs[j] * U[:, j] for j in 1:nf]) .+ 0.01randn(ComplexF64, nm, nf)
         Hb = blockdiag(sparse.(Hs)...)
         y = vec(Y)
@@ -563,7 +563,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         ps, pd = InverseProblem(Hb, y), InverseProblem(Matrix(Hb), y)
         @test ps.H isa SourceEstimation.SparseOperator
         # frequency smoothing L = Lf ⊗ I couples the frequencies
-        Lf = kron(diff_operator(nf, 1), sparse(1.0I, nr, nr))
+        Lf = kron(diff_operator(nf, 1), sparse(1.0I, nu, nu))
         Hd = Matrix(Hb)
         s = solve(ps, Additive(Lq(2.0; L = Lf); λ = 0.1); R = v, precision = true)
         A = Hd' * (Hd ./ v) + 0.1 * Matrix(Lf' * Lf)
@@ -579,7 +579,7 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         end
         # default initializations: heuristic estimate for the OMR and the MAP
         s = solve(ps, Multiplicative(Lq(0.5)))
-        @test s.λ > 0 && all(argmax(abs.(reshape(s.u, nr, nf)[:, j])) == 4 for j in 1:nf)
+        @test s.λ > 0 && all(argmax(abs.(reshape(s.u, nu, nf)[:, j])) == 4 for j in 1:nf)
         @test solve(ps, Bayesian(Lq(1.0))).hyper.τn > 0
         # 2-norm condition number estimate, heuristic consistent with the dense one
         A = sparse(Hermitian(Matrix(Hb' * Hb) + 0.1I))
@@ -601,12 +601,12 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test_throws ArgumentError solve(ps, Multiplicative(Lpq(2, 0.5)); init = 1e-2)
         # groups of a vectorized problem, mixed norm combined with a frequency smoothing
         Ls = diff_operator(nf, 1)
-        f = Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lpq(2, 0.5; samples = nf),
-                                  sample_rows(6:10, nr, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; Lc = Ls),
+        f = Multiplicative(Groups(sample_rows(1:5, nu, nf) => Lpq(2, 0.5; samples = nf),
+                                  sample_rows(6:10, nu, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; Lc = Ls),
                                                                    samples = size(Ls, 1))))
         @test solve(ps, f).converged
-        @test_throws DimensionMismatch solve(ps, Multiplicative(Groups(sample_rows(1:5, nr, nf) => Lq(1.0),
-            sample_rows(6:10, nr, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; Lc = Ls), samples = 3))))
+        @test_throws DimensionMismatch solve(ps, Multiplicative(Groups(sample_rows(1:5, nu, nf) => Lq(1.0),
+            sample_rows(6:10, nu, nf) => Lpq(2, 1; L = space_sample_operator(5, nf; Lc = Ls), samples = 3))))
         # SVD-based parameter choice rules are not available
         @test_throws ArgumentError solve(ps, Additive(Lq(1.0); λ = LCurve()))
         @test_throws ArgumentError solve(ps, Multiplicative(Lq(1.0)); init = GCV())
@@ -669,4 +669,166 @@ const ωn5, ωn6 = (5π)^2 * 50, (6π)^2 * 50
         @test sf.λ ≈ sf.hyper.τs ./ sf.hyper.τn          # complex: ‖r‖² + λ‖u‖_q^q
         @test argmax(abs.(sf.u)) == 17
     end
+
+    @testset "Performance indicators" begin
+        uref = [1.0, -2.0, 0.0, 3.0]
+        u = [1.0, -1.0, 0.5, 3.0]
+        @test relative_error(uref, u) ≈ 100 * 1.5 / 6
+        @test relative_error(uref, u; p = 2) ≈ 100 * norm(uref - u) / norm(uref)
+        @test correlation(uref, -2uref) ≈ 100
+        @test correlation(uref, [0.0, 0.0, 1.0, 0.0]) ≈ 0 atol = 1e-12
+        @test_throws DimensionMismatch relative_error(uref, u[1:3])
+
+        # covariances: one per sample (marginal blocks, Kalman filter) or one for all the unknowns
+        Uref, U = randn(3, 4), randn(3, 4)
+        Σs = [Matrix(Diagonal(fill(Float64(k), 3))) for k in 1:4]
+        Σfull = cat(Σs...; dims = (1, 2))
+        @test precision_metric(Σs; covariance = true) ≈ sqrt(3 * sum(1:4) / 12)
+        @test precision_metric(Σfull; covariance = true) ≈ precision_metric(Σs; covariance = true)
+        mse = (sum(abs2, Uref - U) + 3 * sum(1:4)) / 12
+        @test accuracy_metric(Uref, U, Σs; covariance = true) ≈ sqrt(mse)
+        @test accuracy_metric(Uref, U, Σfull; covariance = true) ≈ sqrt(mse)
+        @test accuracy_metric(Uref, U, zeros(12, 12); covariance = true) ≈ sqrt(sum(abs2, Uref - U) / 12)
+        @test_throws DimensionMismatch accuracy_metric(Uref, U, Σs[1:3]; covariance = true)
+
+        # precisions (default): dense, Hermitian, sparse, diagonal, blocks — same values as Q⁻¹
+        for T in (Float64, ComplexF64)
+            B = randn(T, 12, 12)
+            Q = B' * B + 12I
+            Σ = solve_identity(Q)
+            P = precision_metric(Σ; covariance = true)
+            @test precision_metric(Q) ≈ P
+            @test precision_metric(Hermitian(Q)) ≈ P
+            @test precision_metric(sparse(Q)) ≈ P
+            @test SourceEstimation.inverse_diagonal(sparse(Q); chunk = 5) ≈ real(diag(Σ))
+            @test accuracy_metric(vec(Uref), vec(U), Q) ≈ accuracy_metric(vec(Uref), vec(U), Σ; covariance = true)
+            # wrappers storing a single triangle
+            @test precision_metric(Hermitian(tril(Q), :L)) ≈ P
+            @test precision_metric(Hermitian(sparse(triu(Q)), :U)) ≈ P
+            @test precision_metric(Hermitian(sparse(tril(Q)), :L)) ≈ P
+            # one block per sample, real or complex
+            Qs = [(C = randn(T, 3, 3); C' * C + 3I) for _ in 1:4]
+            Σs_T = solve_identity.(Qs)
+            @test precision_metric(Qs) ≈ precision_metric(Σs_T; covariance = true)
+            @test precision_metric(Qs) ≈ precision_metric(cat(Qs...; dims = (1, 2)))
+            Ur, Uc = randn(T, 3, 4), randn(T, 3, 4)
+            @test accuracy_metric(Ur, Uc, Qs) ≈ accuracy_metric(Ur, Uc, Σs_T; covariance = true)
+            @test precision_metric(Diagonal(T[4, 1])) ≈ sqrt((0.25 + 1) / 2)
+        end
+        @test precision_metric(Diagonal([4.0, 1.0])) ≈ sqrt((0.25 + 1) / 2)
+        @test precision_metric([inv(S) for S in Σs]) ≈ precision_metric(Σs; covariance = true)
+
+        # from a solution: variances by block solves, same values as its precision matrix
+        Random.seed!(21)
+        for T in (Float64, ComplexF64)
+            H, y = randn(T, 12, 6), randn(T, 12)
+            s = solve(InverseProblem(H, y), Additive(Lq(2.0); λ = 0.5); precision = true)
+            ur = randn(T, 6)
+            @test precision_metric(s) ≈ precision_metric(s.precision)
+            @test precision_metric(s) ≈ precision_metric(posterior_covariance(s); covariance = true)
+            @test accuracy_metric(ur, s) ≈ accuracy_metric(ur, s.u, s.precision)
+            @test relative_error(ur, s) == relative_error(ur, s.u)
+        end
+
+        ind = [2.0 4.0; 1.0 8.0; 4.0 2.0]
+        @test performance_ratio(ind) ≈ [sqrt(2 * 2), sqrt(1 * 4), sqrt(4 * 1)]
+        @test_throws ArgumentError performance_ratio([0.0 1.0])
+    end
+
+    @testset "Ill-posedness indicators" begin
+        rng = Xoshiro(31)
+        m, n = 60, 40
+        V = Matrix(qr(randn(rng, m, m)).Q)[:, 1:n]
+        W = Matrix(qr(randn(rng, n, n)).Q)
+        svd_operator(σ) = V * Diagonal(σ) * W'
+
+        # polynomial decay σᵢ = i⁻², smooth field wᵢᴴ u = σᵢ: coefficients σᵢ², Picard satisfied
+        σ = (1:n) .^ -2.0
+        H = svd_operator(σ)
+        u = W * σ
+        η = 1e-4
+        y = H * u + η * randn(rng, m)
+        ip = ill_posedness(H, y; R = η^2 * I)
+        @test ip.σ ≈ σ ./ η                                    # whitened operator H / η
+        @test !ip.noise_estimated && ip.noise_level == 1
+        @test ip.picard_satisfied
+        @test 1.2 < ip.picard_slope < 2.5                      # ≈ 2, flattened near the noise floor
+        @test 5 <= ip.picard_index <= 10                       # σᵢ² ≈ 2η up to i ≈ 8
+        @test ip.decay_rate ≈ 2 atol = 1e-8
+        @test ip.severity == :moderate
+        @test ip.numerical_rank == n && ip.nullity == 0
+        @test ip.condition_number ≈ n^2                        # invariant to the whitening
+        @test ill_posedness(H, y).σ ≈ σ                        # R unknown: no whitening
+        # unknown noise level: estimated from the residual outside the range of H (m > n)
+        ipe = ill_posedness(H, y)
+        @test ipe.noise_estimated
+        @test 0.7η < ipe.noise_level < 1.4η
+        @test abs(ipe.picard_index - ip.picard_index) <= 2
+        @test ill_posedness(InverseProblem(H, y); R = η^2 * I).picard_index == ip.picard_index
+
+        # rough field wᵢᴴ u = 1/σᵢ: flat exact coefficients, Picard condition violated
+        y = H * (W * (1 ./ σ)) + 1e-10 * randn(rng, m)
+        ipv = ill_posedness(H, y; R = 1e-20 * I)
+        @test !ipv.picard_satisfied
+        @test abs(ipv.picard_slope) < 0.2
+        @test ipv.picard_index == n
+
+        # exponential decay: severely ill-posed; complex data
+        Hc = svd_operator(exp.(-0.5 .* (1:n))) .* cis(0.3)
+        ips = ill_posedness(Hc, Hc * randn(rng, ComplexF64, n))
+        @test ips.severity == :severe
+
+        # underdetermined and rank-deficient operators
+        ipu = ill_posedness(randn(rng, 10, 20), randn(rng, 10))
+        @test length(ipu.σ) == 10 && ipu.numerical_rank == 10 && ipu.nullity == 10
+        Hd = randn(rng, 12, 6); Hd[:, 6] .= 0
+        ipd = ill_posedness(Hd, randn(rng, 12))
+        @test ipd.numerical_rank == 5 && ipd.nullity == 1 && ipd.condition_number == Inf
+
+        # space–frequency problem: one analysis per frequency, per-point noise variances
+        Hs = [randn(rng, ComplexF64, 8, 5) for _ in 1:3]
+        Y = randn(rng, ComplexF64, 8, 3)
+        ipf = ill_posedness(InverseProblem(Hs, Y); R = fill(0.5, 8))
+        @test ipf isa Vector{IllPosedness} && length(ipf) == 3
+        @test ipf[2].σ ≈ svdvals(Hs[2] ./ sqrt(0.5))
+
+        @test_throws ArgumentError ill_posedness(H, y; window = 4)
+        @test sprint(show, MIME("text/plain"), ip) isa String
+    end
+end
+
+# Makie extension ---------------------------------------------------------------------------------
+@testset "Plots without Makie: error hint" begin
+    ip = ill_posedness(randn(Xoshiro(1), 20, 10), randn(Xoshiro(2), 20))
+    err = try picardplot(ip); nothing catch e; e end
+    @test err isa MethodError
+    @test occursin("using CairoMakie", sprint(showerror, err))
+end
+
+using Makie
+
+@testset "Makie extension: Picard plot" begin
+    @test Base.get_extension(SourceEstimation, :SourceEstimationMakieExt) !== nothing
+    rng = Xoshiro(3)
+    H, y = randn(rng, 30, 12), randn(rng, 30)
+    ip = ill_posedness(H, y)
+    @test picardplot(ip) isa Makie.Figure
+    @test picardplot(H, y; legend = false, figure = (; size = (400, 300))) isa Makie.Figure
+    @test picardplot(InverseProblem(H, y); R = 0.5I, window = 3, components = :all, smoothed = false) isa Makie.Figure
+
+    ax = Axis(Figure()[1, 1])
+    @test picardplot!(ax, ip; components = 5) === ax
+    @test length(ax.scene.plots) == 4 + (ip.picard_index > 0)   # σ, β, ratio, noise level, Picard index
+    ax2 = Axis(Figure()[1, 1])
+    picardplot!(ax2, ip; noise = false, index = false)
+    @test length(ax2.scene.plots) == 3
+    @test_throws ArgumentError picardplot(ip; components = :first)
+
+    # zero coefficients (rank-deficient operator, no data) are skipped on the log scale
+    @test picardplot(ill_posedness([1.0 0; 0 0; 0 0], zeros(3)); components = :all) isa Makie.Figure
+
+    # space–frequency problem: one analysis per sample
+    prob = InverseProblem([randn(rng, ComplexF64, 8, 5) for _ in 1:3], randn(rng, ComplexF64, 8, 3))
+    @test picardplot(prob; sample = 2) isa Makie.Figure
+    @test_throws ArgumentError picardplot(prob)
 end
